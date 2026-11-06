@@ -137,6 +137,7 @@ const SharedRoomFormModal: React.FC<SharedRoomFormModalProps> = ({
             type='primary'
             loading={saving}
             disabled={!name.trim() || selectedTeamIds.length === 0}
+            data-testid='shared-room-submit-btn'
             onClick={() => void handleSubmit()}
           >
             {mode === 'edit' ? 'Lưu thay đổi' : 'Tạo Phòng Họp'}

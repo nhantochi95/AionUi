@@ -18,7 +18,7 @@ import {
   Tag,
   Tooltip,
 } from '@arco-design/web-react';
-import { Communication, EditOne, Inbox, Peoples, Plus } from '@icon-park/react';
+import { Communication, Delete, EditOne, Inbox, Peoples, Plus } from '@icon-park/react';
 import classNames from 'classnames';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -32,6 +32,7 @@ import type {
   SharedRoomTaskStatus,
 } from '@/common/types/sharedRoom';
 import SharedRoomFormModal from './SharedRoomFormModal';
+import { useSharedRoomList } from './hooks/useSharedRoomList';
 
 const TEAM_ACCENT_PALETTE = [
   '#165DFF',
@@ -106,6 +107,7 @@ const ArtifactCard: React.FC<{ artifact: IStagedRoomArtifact }> = ({ artifact })
 const SharedRoomPage: React.FC = () => {
   const { id: roomId } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { mutate: refreshRoomList, removeRoom } = useSharedRoomList();
 
   const {
     data: room,
@@ -167,6 +169,15 @@ const SharedRoomPage: React.FC = () => {
 
   const timelineEndRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    setComposerText('');
+    setAttachedFiles([]);
+    setReplyToMsg(null);
+    setTgPopoverOpen(false);
+    setEditModalOpen(false);
+    setTaskModalOpen(false);
+  }, [roomId]);
 
   useEffect(() => {
     if (!room) return;
@@ -256,7 +267,7 @@ const SharedRoomPage: React.FC = () => {
         }
       }
     }
-    return list.sort((a, b) => b.createdAt - a.createdAt);
+    return list.toSorted((a, b) => b.createdAt - a.createdAt);
   }, [messages, tasks]);
 
   const insertMention = useCallback((handle: string) => {
@@ -309,7 +320,13 @@ const SharedRoomPage: React.FC = () => {
       setComposerText('');
       setAttachedFiles([]);
       setReplyToMsg(null);
-      await Promise.all([mutateMessages(), mutateRoom()]);
+      await Promise.all([
+        mutateMessages((prev) => {
+          const list = prev ?? [];
+          return list.some((m) => m.id === res.message.id) ? list : [...list, res.message];
+        }, true),
+        mutateRoom(),
+      ]);
       if (res.routed_targets.length > 0) {
         const names = res.routed_targets
           .map((rt) => room?.members.find((m) => m.team_id === rt.team_id)?.team_name ?? rt.team_id)
@@ -322,6 +339,26 @@ const SharedRoomPage: React.FC = () => {
       setSending(false);
     }
   }, [attachedFiles, composerText, mutateMessages, mutateRoom, replyToMsg, room?.members, roomId, sending]);
+
+  const handleDeleteCurrentRoom = useCallback(() => {
+    if (!room) return;
+    Modal.confirm({
+      title: 'Xóa Phòng Họp Liên Team?',
+      content: `Phòng "${room.name}" sẽ bị xóa khỏi danh sách kênh chung (các Team thành viên vẫn được giữ nguyên 100%).`,
+      okText: 'Xóa phòng',
+      cancelText: 'Huỷ',
+      okButtonProps: { status: 'danger', 'data-testid': 'shared-room-confirm-delete-btn' } as Record<string, unknown>,
+      onOk: async () => {
+        try {
+          await removeRoom(room.id);
+          Message.success(`Đã xóa phòng "${room.name}"`);
+          void navigate('/guid');
+        } catch (err) {
+          Message.error(`Không thể xóa phòng: ${String(err)}`);
+        }
+      },
+    });
+  }, [navigate, removeRoom, room]);
 
   const handleAllowMoreHops = useCallback(async () => {
     if (!roomId || allowingHops) return;
@@ -611,6 +648,7 @@ const SharedRoomPage: React.FC = () => {
           >
             <button
               type='button'
+              data-testid='shared-room-telegram-btn'
               className='h-28px px-10px rd-8px inline-flex items-center gap-6px text-12px font-500 bg-fill-2 hover:bg-fill-3 border border-solid border-border-2 cursor-pointer text-t-primary'
             >
               <span className='text-[#2AABEE] inline-flex items-center'>
@@ -627,8 +665,20 @@ const SharedRoomPage: React.FC = () => {
             <Button
               size='small'
               type='secondary'
+              data-testid='shared-room-edit-btn'
               icon={<EditOne theme='outline' size='14' fill='currentColor' />}
               onClick={() => setEditModalOpen(true)}
+            />
+          </Tooltip>
+
+          <Tooltip content='Xóa phòng họp liên team'>
+            <Button
+              size='small'
+              type='secondary'
+              status='danger'
+              data-testid='shared-room-delete-btn'
+              icon={<Delete theme='outline' size='14' fill='currentColor' />}
+              onClick={handleDeleteCurrentRoom}
             />
           </Tooltip>
 
@@ -888,11 +938,15 @@ const SharedRoomPage: React.FC = () => {
 
               <textarea
                 ref={textareaRef}
+                data-testid='shared-room-composer-input'
                 rows={2}
                 placeholder='Nhập chỉ đạo cho các Leader... (@tên-team để gọi đích danh, Enter để gửi, Shift+Enter xuống dòng)'
                 value={composerText}
                 onChange={(e) => setComposerText(e.target.value)}
                 onKeyDown={(e) => {
+                  if (e.nativeEvent.isComposing || e.keyCode === 229) {
+                    return;
+                  }
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
                     void handleSendMessage();
@@ -903,6 +957,7 @@ const SharedRoomPage: React.FC = () => {
 
               <Button
                 type='primary'
+                data-testid='shared-room-send-btn'
                 loading={sending}
                 disabled={!composerText.trim() && attachedFiles.length === 0}
                 onClick={() => void handleSendMessage()}
@@ -945,6 +1000,7 @@ const SharedRoomPage: React.FC = () => {
                 <Button
                   size='mini'
                   type='outline'
+                  data-testid='shared-room-new-task-btn'
                   icon={<Plus theme='outline' size='12' fill='currentColor' />}
                   onClick={() => {
                     setTaskToTeamId(room.members[0]?.team_id ?? '');
@@ -1066,6 +1122,7 @@ const SharedRoomPage: React.FC = () => {
         onClose={() => setEditModalOpen(false)}
         onSaved={(updated) => {
           void mutateRoom(updated, false);
+          void refreshRoomList();
         }}
       />
 
@@ -1082,6 +1139,7 @@ const SharedRoomPage: React.FC = () => {
             </Button>
             <Button
               type='primary'
+              data-testid='shared-room-task-submit-btn'
               loading={taskSaving}
               disabled={!taskToTeamId || !taskTitle.trim()}
               onClick={() => void handleCreateTask()}
@@ -1114,6 +1172,7 @@ const SharedRoomPage: React.FC = () => {
                 Giao cho Team <span className='text-danger-6'>*</span>
               </span>
               <Select
+                data-testid='shared-room-task-to-select'
                 placeholder='Chọn Team nhận'
                 value={taskToTeamId || undefined}
                 onChange={(val) => setTaskToTeamId(val as string)}
@@ -1132,6 +1191,7 @@ const SharedRoomPage: React.FC = () => {
               Tiêu đề công việc <span className='text-danger-6'>*</span>
             </span>
             <Input
+              data-testid='shared-room-task-title-input'
               placeholder='Ví dụ: Implement UI từ OpenAPI spec đã chốt'
               value={taskTitle}
               onChange={setTaskTitle}
@@ -1141,6 +1201,7 @@ const SharedRoomPage: React.FC = () => {
           <div className='flex flex-col gap-4px'>
             <span className='text-12px font-500 text-t-secondary'>Mô tả chi tiết / Tiêu chí bàn giao</span>
             <Input.TextArea
+              data-testid='shared-room-task-desc-input'
               rows={3}
               placeholder='Mô tả đầu vào, yêu cầu đầu ra...'
               value={taskDescription}
@@ -1154,6 +1215,7 @@ const SharedRoomPage: React.FC = () => {
                 Chờ Task tiền đề hoàn thành (<code>blocked_by</code>)
               </span>
               <Select
+                data-testid='shared-room-task-blocked-by-select'
                 mode='multiple'
                 placeholder='Không chặn (đánh thức Leader ngay lập tức)'
                 value={taskBlockedBy}

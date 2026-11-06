@@ -94,8 +94,8 @@ const SharedRoomSiderSection: React.FC<SharedRoomSiderSectionProps> = ({
           try {
             await removeRoom(room.id);
             Message.success(`Đã xóa phòng "${room.name}"`);
-            if (window.location.hash.includes(`/shared-room/${room.id}`)) {
-              window.location.hash = '#/';
+            if (pathname.startsWith(`/shared-room/${room.id}`)) {
+              void navigate('/guid');
             }
           } catch (err) {
             Message.error(`Không thể xóa phòng: ${String(err)}`);
@@ -103,7 +103,7 @@ const SharedRoomSiderSection: React.FC<SharedRoomSiderSectionProps> = ({
         },
       });
     },
-    [removeRoom]
+    [navigate, pathname, removeRoom]
   );
 
   return (

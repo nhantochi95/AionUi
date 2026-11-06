@@ -255,6 +255,7 @@ const TeamTelegramBridgePopover: React.FC<TeamTelegramBridgePopoverProps> = ({ t
             </div>
             <Switch
               size='small'
+              data-testid='team-tg-notify-switch'
               checked={Boolean(config?.notify_enabled)}
               loading={saving}
               onChange={(val) => void handleToggleNotify(val)}
@@ -270,6 +271,7 @@ const TeamTelegramBridgePopover: React.FC<TeamTelegramBridgePopoverProps> = ({ t
             </div>
             <Switch
               size='small'
+              data-testid='team-tg-dm-switch'
               checked={Boolean(config?.is_active_dm_target)}
               disabled={!config?.has_authorized_user}
               loading={saving}
@@ -281,6 +283,7 @@ const TeamTelegramBridgePopover: React.FC<TeamTelegramBridgePopoverProps> = ({ t
             <span className='text-12px font-500 text-t-secondary'>Chế độ lọc thông báo</span>
             <Select
               size='small'
+              data-testid='team-tg-stream-select'
               value={(config?.stream_mode as TeamTelegramStreamMode) || 'milestones'}
               disabled={saving}
               onChange={(val) => void handleStreamModeChange(val as TeamTelegramStreamMode)}
@@ -292,6 +295,7 @@ const TeamTelegramBridgePopover: React.FC<TeamTelegramBridgePopoverProps> = ({ t
 
           <div className='border-t border-border-2 pt-8px flex flex-col gap-8px'>
             <div
+              data-testid='team-tg-group-toggle'
               className='flex items-center justify-between cursor-pointer select-none text-12px text-t-secondary hover:text-t-primary'
               onClick={() => setShowGroupSection((v) => !v)}
             >
@@ -305,25 +309,34 @@ const TeamTelegramBridgePopover: React.FC<TeamTelegramBridgePopoverProps> = ({ t
               <div className='flex flex-col gap-8px rd-8px bg-fill-1 p-8px border border-border-2'>
                 <Input
                   size='small'
+                  data-testid='team-tg-group-chat-input'
                   placeholder='Group Chat ID (vd: -1001234567890)'
                   value={groupChatId}
                   onChange={setGroupChatId}
                 />
                 <Input
                   size='small'
+                  data-testid='team-tg-group-thread-input'
                   placeholder='Topic Thread ID (tuỳ chọn, vd: 42)'
                   value={groupThreadId}
                   onChange={setGroupThreadId}
                 />
                 <div className='flex items-center justify-end gap-6px'>
                   {config?.group_chat_id && (
-                    <Button size='mini' status='danger' disabled={saving} onClick={() => void handleClearGroupBinding()}>
+                    <Button
+                      size='mini'
+                      status='danger'
+                      data-testid='team-tg-group-clear-btn'
+                      disabled={saving}
+                      onClick={() => void handleClearGroupBinding()}
+                    >
                       Gỡ gắn
                     </Button>
                   )}
                   <Button
                     size='mini'
                     type='primary'
+                    data-testid='team-tg-group-save-btn'
                     loading={saving}
                     onClick={() => void handleSaveGroupBinding()}
                   >
