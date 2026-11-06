@@ -506,8 +506,21 @@ function prepareAioncore(options) {
   let sourceDetail = {};
   let tempDir = null;
 
+  // 0. Prefer explicit local custom binary override before any network download.
+  const localPriorityBinary = (process.env.AIONUI_LOCAL_AIONCORE_BIN || '').trim();
+  if (localPriorityBinary) {
+    const resolvedPriorityBinary = path.resolve(localPriorityBinary);
+    if (!fs.existsSync(resolvedPriorityBinary) || !fs.statSync(resolvedPriorityBinary).isFile()) {
+      throw new Error(`AIONUI_LOCAL_AIONCORE_BIN points to a missing file: ${resolvedPriorityBinary}`);
+    }
+    sourcePath = resolvedPriorityBinary;
+    sourceType = 'local-priority-binary';
+    sourceDetail = { path: resolvedPriorityBinary };
+    console.log(`  Using priority local aioncore binary: ${resolvedPriorityBinary}`);
+  }
+
   // 1. Download from GitHub Actions artifacts when manual build run id is provided.
-  if (actionsRunId) {
+  if (!sourcePath && actionsRunId) {
     const result = downloadAndExtractActionsArtifact(platform, arch, actionsRunId);
     sourcePath = result.binaryPath;
     tempDir = result.tempDir;

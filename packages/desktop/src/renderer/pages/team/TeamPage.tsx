@@ -27,6 +27,7 @@ import TeamTabs from './components/TeamTabs';
 import TeamChatView from './components/TeamChatView';
 import TeamAgentIdentity from './components/TeamAgentIdentity';
 import TeamViewToggle from './components/TeamViewToggle';
+import TeamTelegramBridgePopover from './components/TeamTelegramBridgePopover';
 import TeamActivityView from './activity/TeamActivityView';
 import TeamWarmupOverlay from './components/TeamWarmupOverlay';
 import { useTeamViewMode } from './hooks/useTeamViewMode';
@@ -813,7 +814,12 @@ const TeamPageContent: React.FC<TeamPageContentProps> = ({
           isTemporaryWorkspace={isTeamWorkspaceTemporary}
           workspacePreferenceKey={team.id}
           onRenameTitle={onRenameTeam}
-          headerExtra={assistants.length > 1 ? <TeamViewToggle value={viewMode} onChange={setViewMode} /> : undefined}
+          headerExtra={
+            <div className='flex items-center gap-8px'>
+              <TeamTelegramBridgePopover teamId={team.id} teamName={team.name} />
+              {assistants.length > 1 ? <TeamViewToggle value={viewMode} onChange={setViewMode} /> : null}
+            </div>
+          }
           headerLeading={
             <span className='inline-flex w-16px h-16px items-center justify-center shrink-0 leading-none text-t-primary'>
               <Peoples theme='outline' size='16' fill='currentColor' style={{ lineHeight: 0 }} />

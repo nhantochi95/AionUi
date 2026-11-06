@@ -2218,6 +2218,22 @@ export const channel = {
     }
   ),
   userAuthorized: wsMappedEmitter<IChannelUser>('channel.user-authorized', (raw) => toChannelUser(raw as RawUser)),
+  listTeamBindings: httpGet<import('@/common/types/sharedRoom').ITeamTelegramBridgeConfig[], void>(
+    '/api/channel/team-bindings'
+  ),
+  getTeamBinding: httpGet<import('@/common/types/sharedRoom').ITeamTelegramBridgeConfig, { team_id: string }>(
+    (p) => `/api/channel/team-bindings/${encodeURIComponent(p.team_id)}`
+  ),
+  upsertTeamBinding: httpPut<
+    import('@/common/types/sharedRoom').ITeamTelegramBridgeConfig,
+    import('@/common/types/sharedRoom').IUpsertTeamTelegramBridgeParams
+  >(
+    (p) => `/api/channel/team-bindings/${encodeURIComponent(p.team_id)}`,
+    ({ team_id: _teamId, ...rest }) => rest
+  ),
+  deleteTeamBinding: httpDelete<import('@/common/types/sharedRoom').ITeamTelegramBridgeConfig, { team_id: string }>(
+    (p) => `/api/channel/team-bindings/${encodeURIComponent(p.team_id)}`
+  ),
 };
 
 // ---------------------------------------------------------------------------
@@ -2417,6 +2433,82 @@ export const team = {
   childTurnCompleted: wsEmitter<ITeamChildTurnEvent>('team.childTurnCompleted'),
   childTurnCancelled: wsEmitter<ITeamChildTurnEvent>('team.childTurnCancelled'),
   slotWorkChanged: wsEmitter<ITeamSlotWorkChangedEvent>('team.slotWorkChanged'),
+  proactiveNotification: wsEmitter<import('@/common/types/sharedRoom').ITeamProactiveNotificationEvent>(
+    'team.proactiveNotification'
+  ),
+};
+
+// ---------------------------------------------------------------------------
+// Multi-Team Shared Rooms (Leader Hub) — routed to /api/shared-rooms/*
+// ---------------------------------------------------------------------------
+
+export const sharedRoom = {
+  list: httpGet<import('@/common/types/sharedRoom').ISharedRoom[], void>('/api/shared-rooms'),
+  create: httpPost<
+    import('@/common/types/sharedRoom').ISharedRoom,
+    import('@/common/types/sharedRoom').ICreateSharedRoomParams
+  >('/api/shared-rooms'),
+  get: httpGet<import('@/common/types/sharedRoom').ISharedRoom, { id: string }>(
+    (p) => `/api/shared-rooms/${encodeURIComponent(p.id)}`,
+    { silentStatuses: [404] }
+  ),
+  update: httpPatch<
+    import('@/common/types/sharedRoom').ISharedRoom,
+    import('@/common/types/sharedRoom').IUpdateSharedRoomParams
+  >(
+    (p) => `/api/shared-rooms/${encodeURIComponent(p.id)}`,
+    ({ id: _id, ...rest }) => rest
+  ),
+  remove: httpDelete<void, { id: string }>((p) => `/api/shared-rooms/${encodeURIComponent(p.id)}`),
+  listMessages: httpGet<import('@/common/types/sharedRoom').ISharedRoomMessage[], { id: string; limit?: number }>(
+    (p) =>
+      `/api/shared-rooms/${encodeURIComponent(p.id)}/messages${p.limit != null ? `?limit=${p.limit}` : ''}`
+  ),
+  sendMessage: httpPost<
+    import('@/common/types/sharedRoom').ISendSharedRoomMessageResult,
+    import('@/common/types/sharedRoom').ISendSharedRoomMessageParams
+  >(
+    (p) => `/api/shared-rooms/${encodeURIComponent(p.id)}/messages`,
+    ({ id: _id, ...rest }) => rest
+  ),
+  allowMoreHops: httpPost<import('@/common/types/sharedRoom').ISharedRoom, { id: string; grant_hops?: number }>(
+    (p) => `/api/shared-rooms/${encodeURIComponent(p.id)}/allow-more-hops`,
+    (p) => ({ grant_hops: p.grant_hops ?? 5 })
+  ),
+  listTasks: httpGet<import('@/common/types/sharedRoom').ISharedRoomTask[], { room_id: string }>(
+    (p) => `/api/shared-rooms/${encodeURIComponent(p.room_id)}/tasks`
+  ),
+  createTask: httpPost<
+    import('@/common/types/sharedRoom').ISharedRoomTask,
+    import('@/common/types/sharedRoom').ICreateSharedRoomTaskParams
+  >(
+    (p) => `/api/shared-rooms/${encodeURIComponent(p.room_id)}/tasks`,
+    ({ room_id: _roomId, ...rest }) => rest
+  ),
+  updateTask: httpPatch<
+    import('@/common/types/sharedRoom').ISharedRoomTask,
+    import('@/common/types/sharedRoom').IUpdateSharedRoomTaskParams
+  >(
+    (p) => `/api/shared-rooms/${encodeURIComponent(p.room_id)}/tasks/${encodeURIComponent(p.task_id)}`,
+    ({ room_id: _roomId, task_id: _taskId, ...rest }) => rest
+  ),
+  upsertTelegramBinding: httpPut<
+    import('@/common/types/sharedRoom').ISharedRoom,
+    import('@/common/types/sharedRoom').IUpsertRoomTelegramBindingParams
+  >(
+    (p) => `/api/shared-rooms/${encodeURIComponent(p.id)}/telegram-binding`,
+    ({ id: _id, ...rest }) => rest
+  ),
+  deleteTelegramBinding: httpDelete<import('@/common/types/sharedRoom').ISharedRoom, { id: string }>(
+    (p) => `/api/shared-rooms/${encodeURIComponent(p.id)}/telegram-binding`
+  ),
+  created: wsEmitter<import('@/common/types/sharedRoom').ISharedRoomCreatedEvent>('sharedRoom.created'),
+  updated: wsEmitter<import('@/common/types/sharedRoom').ISharedRoomUpdatedEvent>('sharedRoom.updated'),
+  removed: wsEmitter<import('@/common/types/sharedRoom').ISharedRoomRemovedEvent>('sharedRoom.removed'),
+  messageCreated: wsEmitter<import('@/common/types/sharedRoom').ISharedRoomMessageCreatedEvent>(
+    'sharedRoom.messageCreated'
+  ),
+  taskChanged: wsEmitter<import('@/common/types/sharedRoom').ISharedRoomTaskChangedEvent>('sharedRoom.taskChanged'),
 };
 
 export const sidebar = {

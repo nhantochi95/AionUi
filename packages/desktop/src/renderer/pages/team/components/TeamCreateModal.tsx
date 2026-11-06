@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Button, Input, Message } from '@arco-design/web-react';
+import { Button, Input, Message, Switch } from '@arco-design/web-react';
 import type { RefInputType } from '@arco-design/web-react/es/Input/interface';
 import { Plus } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
@@ -42,6 +42,8 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
   const [selectedMembers, setSelectedMembers] = useState<TeamMemberDraft[]>([]);
   const [leaderSelectionId, setLeaderSelectionId] = useState<string | undefined>(undefined);
   const [workspace, setWorkspace] = useState('');
+  const [enableTelegramBridge, setEnableTelegramBridge] = useState(true);
+  const [setTelegramDmDefault, setSetTelegramDmDefault] = useState(false);
   const [loading, setLoading] = useState(false);
   // 窄屏专用：助手选择器以下拉列表形式，锚在“添加成员”按钮上按需唤出。
   const [assistantDropdownOpen, setAssistantDropdownOpen] = useState(false);
@@ -57,6 +59,8 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
     setSelectedMembers([]);
     setLeaderSelectionId(undefined);
     setWorkspace('');
+    setEnableTelegramBridge(true);
+    setSetTelegramDmDefault(false);
     setAssistantDropdownOpen(false);
     onClose();
   };
@@ -133,6 +137,16 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
         return;
       }
 
+      try {
+        await ipcBridge.channel.upsertTeamBinding.invoke({
+          team_id: team.id,
+          notify_enabled: enableTelegramBridge,
+          set_active_dm_target: setTelegramDmDefault ? true : undefined,
+        });
+      } catch (bridgeErr) {
+        console.warn('Optional Telegram bridge setup skipped:', bridgeErr);
+      }
+
       onCreated(team);
       handleClose();
     } catch (error) {
@@ -192,6 +206,20 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
           triggerTestId='team-create-workspace-trigger'
           menuTestId='team-create-workspace-menu'
         />
+      </div>
+
+      <div className='text-13px font-500 leading-20px text-t-secondary'>Telegram</div>
+      <div className='flex flex-wrap items-center gap-12px text-12px text-t-secondary'>
+        <label className='inline-flex items-center gap-6px cursor-pointer select-none'>
+          <Switch size='small' checked={enableTelegramBridge} onChange={setEnableTelegramBridge} />
+          <span>Leader báo cáo chủ động</span>
+        </label>
+        {enableTelegramBridge && (
+          <label className='inline-flex items-center gap-6px cursor-pointer select-none text-t-tertiary'>
+            <Switch size='small' checked={setTelegramDmDefault} onChange={setSetTelegramDmDefault} />
+            <span>Đặt làm chat DM hiện tại</span>
+          </label>
+        )}
       </div>
     </div>
   );
