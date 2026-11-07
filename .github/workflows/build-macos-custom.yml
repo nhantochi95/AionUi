@@ -72,6 +72,7 @@ jobs:
         shell: bash
         run: |
           cd "${RUNNER_TEMP}/aioncore-src"
+          rustup target add "${{ matrix.rust_target }}"
           cargo build --release --target "${{ matrix.rust_target }}" -p aionui-app
           ls -lh "target/${{ matrix.rust_target }}/release/aioncore"
           echo "AIONUI_LOCAL_AIONCORE_BIN=${RUNNER_TEMP}/aioncore-src/target/${{ matrix.rust_target }}/release/aioncore" >> "$GITHUB_ENV"
