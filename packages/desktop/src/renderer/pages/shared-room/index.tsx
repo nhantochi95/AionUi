@@ -34,16 +34,7 @@ import type {
 import SharedRoomFormModal from './SharedRoomFormModal';
 import { useSharedRoomList } from './hooks/useSharedRoomList';
 
-const TEAM_ACCENT_PALETTE = [
-  '#165DFF',
-  '#00B42A',
-  '#722ED1',
-  '#FF7D00',
-  '#0FC6C2',
-  '#EB0AA4',
-  '#3491FA',
-  '#F53F3F',
-];
+const TEAM_ACCENT_PALETTE = ['#165DFF', '#00B42A', '#722ED1', '#FF7D00', '#0FC6C2', '#EB0AA4', '#3491FA', '#F53F3F'];
 
 function mentionSlug(name: string): string {
   return name
@@ -82,7 +73,7 @@ const TelegramIcon: React.FC<{ size?: number }> = ({ size = 14 }) => (
 );
 
 const ArtifactCard: React.FC<{ artifact: IStagedRoomArtifact }> = ({ artifact }) => (
-  <div className='inline-flex items-center gap-8px px-10px py-6px rd-8px bg-fill-2 border border-solid border-border-2 text-12px max-w-full'>
+  <div className='inline-flex items-center gap-8px px-10px py-6px rd-8px bg-fill-2 border border-solid border-arco-2 text-12px max-w-full'>
     <span className='font-500 truncate max-w-200px' title={artifact.file_name}>
       {artifact.is_image ? '🖼️' : '📄'} {artifact.file_name}
     </span>
@@ -129,10 +120,7 @@ const SharedRoomPage: React.FC = () => {
     { revalidateOnFocus: false }
   );
 
-  const {
-    data: tasksData,
-    mutate: mutateTasks,
-  } = useSWR<ISharedRoomTask[]>(
+  const { data: tasksData, mutate: mutateTasks } = useSWR<ISharedRoomTask[]>(
     roomId ? `shared-room/${roomId}/tasks` : null,
     () => ipcBridge.sharedRoom.listTasks.invoke({ room_id: roomId! }),
     { revalidateOnFocus: false }
@@ -516,39 +504,37 @@ const SharedRoomPage: React.FC = () => {
   const openTasksCount = tasks.filter((t) => t.status !== 'completed' && t.status !== 'cancelled').length;
 
   const tgRoomPopoverContent = (
-    <div className='w-320px flex flex-col gap-10px p-4px text-t-primary'>
-      <div className='flex items-center justify-between border-b border-border-2 pb-8px'>
-        <span className='text-13px font-600'>Đồng bộ Telegram · #{room.name}</span>
+    <div className='w-full min-w-0 box-border flex flex-col gap-10px text-t-primary'>
+      <div className='flex items-center justify-between gap-8px border-b border-arco-2 pb-8px min-w-0'>
+        <span className='text-13px font-600 truncate min-w-0 flex-1'>Đồng bộ Telegram · #{room.name}</span>
         {room.is_active_dm_target && (
-          <Tag size='small' color='arcoblue'>
-            Đang chọn trên DM
-          </Tag>
+          <span className='shrink-0 inline-flex items-center'>
+            <Tag size='small' color='arcoblue'>
+              Đang chọn trên DM
+            </Tag>
+          </span>
         )}
       </div>
 
-      <div className='flex items-center justify-between gap-10px'>
-        <div className='flex flex-col gap-2px'>
+      <div className='flex items-center justify-between gap-12px w-full min-w-0'>
+        <div className='flex flex-col gap-2px min-w-0 flex-1'>
           <span className='text-12px font-500'>Đặt làm kênh chat trên DM 1-1</span>
-          <span className='text-11px text-t-tertiary leading-15px'>
+          <span className='text-11px text-t-tertiary leading-15px break-words'>
             Nhắn thẳng vào Bot Telegram sẽ gửi vào Phòng Họp Liên Team này (hoặc gõ <code>/room</code>)
           </span>
         </div>
         <Switch
           size='small'
+          className='shrink-0 aion-tg-switch'
           checked={room.is_active_dm_target}
           loading={tgSaving}
           onChange={(val) => void handleToggleRoomDmTarget(val)}
         />
       </div>
 
-      <div className='border-t border-border-2 pt-8px flex flex-col gap-6px'>
+      <div className='border-t border-arco-2 pt-8px flex flex-col gap-6px w-full min-w-0'>
         <span className='text-12px font-500 text-t-secondary'>Gắn với Telegram Group / Topic riêng</span>
-        <Input
-          size='small'
-          placeholder='Group Chat ID (vd: -1001234567890)'
-          value={tgChatId}
-          onChange={setTgChatId}
-        />
+        <Input size='small' placeholder='Group Chat ID (vd: -1001234567890)' value={tgChatId} onChange={setTgChatId} />
         <Input
           size='small'
           placeholder='Topic Thread ID (tuỳ chọn, vd: 99)'
@@ -572,9 +558,9 @@ const SharedRoomPage: React.FC = () => {
   return (
     <div className='h-full w-full flex flex-col overflow-hidden bg-bg-1 text-t-primary'>
       {/* Top Header */}
-      <header className='shrink-0 border-b border-border-2 px-16px py-10px flex flex-wrap items-center justify-between gap-10px bg-bg-1'>
+      <header className='shrink-0 border-b border-arco-2 px-16px py-10px flex flex-wrap items-center justify-between gap-10px bg-bg-1'>
         <div className='flex items-center gap-10px min-w-0 flex-1'>
-          <span className='w-30px h-30px rd-8px bg-primary-6/12 text-primary-6 inline-flex items-center justify-center shrink-0'>
+          <span className='w-30px h-30px rd-8px bg-[#165DFF]/12 text-[#165DFF] inline-flex items-center justify-center shrink-0'>
             <Communication theme='outline' size='17' fill='currentColor' />
           </span>
           <div className='flex flex-col min-w-0'>
@@ -586,9 +572,7 @@ const SharedRoomPage: React.FC = () => {
                 </Tag>
               </Tooltip>
             </div>
-            {room.description && (
-              <span className='text-11px text-t-tertiary truncate'>{room.description}</span>
-            )}
+            {room.description && <span className='text-11px text-t-tertiary truncate'>{room.description}</span>}
           </div>
         </div>
 
@@ -605,7 +589,7 @@ const SharedRoomPage: React.FC = () => {
               >
                 <button
                   type='button'
-                  className='h-26px px-8px rd-999px inline-flex items-center gap-5px text-12px bg-fill-2 hover:bg-fill-3 border border-solid border-border-2 cursor-pointer transition-colors'
+                  className='h-26px px-8px rd-999px inline-flex items-center gap-5px text-12px bg-fill-2 hover:bg-fill-3 border border-solid border-arco-2 cursor-pointer transition-colors'
                   onClick={(e) => {
                     if (e.shiftKey) {
                       void navigate(`/team/${member.team_id}`);
@@ -614,10 +598,7 @@ const SharedRoomPage: React.FC = () => {
                     }
                   }}
                 >
-                  <span
-                    className='w-7px h-7px rd-full shrink-0'
-                    style={{ backgroundColor: accent }}
-                  />
+                  <span className='w-7px h-7px rd-full shrink-0' style={{ backgroundColor: accent }} />
                   <span className='font-500 max-w-120px truncate'>{member.team_name}</span>
                   <span className='text-11px text-t-tertiary'>· {member.leader_name} 👑</span>
                   {member.is_host && (
@@ -642,6 +623,8 @@ const SharedRoomPage: React.FC = () => {
           <Popover
             trigger='click'
             position='br'
+            className='aion-telegram-bridge-popover'
+            style={{ width: 372, maxWidth: 'calc(100vw - 24px)' }}
             popupVisible={tgPopoverOpen}
             onVisibleChange={setTgPopoverOpen}
             content={tgRoomPopoverContent}
@@ -649,7 +632,7 @@ const SharedRoomPage: React.FC = () => {
             <button
               type='button'
               data-testid='shared-room-telegram-btn'
-              className='h-28px px-10px rd-8px inline-flex items-center gap-6px text-12px font-500 bg-fill-2 hover:bg-fill-3 border border-solid border-border-2 cursor-pointer text-t-primary'
+              className='h-28px px-10px rd-8px inline-flex items-center gap-6px text-12px font-500 bg-fill-2 hover:bg-fill-3 border border-solid border-arco-2 cursor-pointer text-t-primary'
             >
               <span className='text-[#2AABEE] inline-flex items-center'>
                 <TelegramIcon size={13} />
@@ -682,14 +665,16 @@ const SharedRoomPage: React.FC = () => {
             />
           </Tooltip>
 
-          <Badge count={openTasksCount} dot={false} maxCount={99}>
+          <Badge count={openTasksCount} dot={false} maxCount={99} offset={[-3, 3]}>
             <Button
               size='small'
               type={rightPanelOpen ? 'primary' : 'secondary'}
-              icon={<Inbox theme='outline' size='14' fill='currentColor' />}
               onClick={() => setRightPanelOpen((v) => !v)}
             >
-              Task & File
+              <span className='inline-flex items-center gap-6px'>
+                <Inbox theme='outline' size='14' fill='currentColor' />
+                <span>Task & File</span>
+              </span>
             </Button>
           </Badge>
         </div>
@@ -699,15 +684,10 @@ const SharedRoomPage: React.FC = () => {
       {isHopLimitReached && (
         <div className='shrink-0 bg-warning-1 border-b border-warning-3 px-16px py-8px flex items-center justify-between gap-12px'>
           <span className='text-12px text-t-primary'>
-            ⏸ <b>Bảo vệ chống lặp vô hạn:</b> Các Leader đã tự trao đổi liên tiếp đạt ngưỡng{' '}
-            <b>{room.max_hops} lượt</b>. Anh có thể gửi chỉ đạo mới hoặc bấm nút bên phải để cấp thêm 5 lượt thảo luận.
+            ⏸ <b>Bảo vệ chống lặp vô hạn:</b> Các Leader đã tự trao đổi liên tiếp đạt ngưỡng <b>{room.max_hops} lượt</b>
+            . Anh có thể gửi chỉ đạo mới hoặc bấm nút bên phải để cấp thêm 5 lượt thảo luận.
           </span>
-          <Button
-            size='mini'
-            type='primary'
-            loading={allowingHops}
-            onClick={() => void handleAllowMoreHops()}
-          >
+          <Button size='mini' type='primary' loading={allowingHops} onClick={() => void handleAllowMoreHops()}>
             ✅ Cho phép thảo luận tiếp (+5 lượt)
           </Button>
         </div>
@@ -719,7 +699,7 @@ const SharedRoomPage: React.FC = () => {
         <div className='flex-1 min-w-0 flex flex-col h-full'>
           <div className='flex-1 min-h-0 overflow-y-auto px-20px py-16px flex flex-col gap-14px'>
             {room.rules && (
-              <div className='rd-8px bg-fill-1 border border-dashed border-border-2 px-12px py-8px text-12px text-t-secondary'>
+              <div className='rd-8px bg-fill-1 border border-dashed border-arco-2 px-12px py-8px text-12px text-t-secondary'>
                 <b>📌 Quy tắc phối hợp của phòng:</b> {room.rules}
               </div>
             )}
@@ -753,9 +733,7 @@ const SharedRoomPage: React.FC = () => {
 
                 const isUser = msg.sender_type === 'user';
                 const replied = msg.reply_to_id ? messageById.get(msg.reply_to_id) : undefined;
-                const accent = msg.sender_team_id
-                  ? (teamColorMap.get(msg.sender_team_id) ?? '#165DFF')
-                  : '#165DFF';
+                const accent = msg.sender_team_id ? (teamColorMap.get(msg.sender_team_id) ?? '#165DFF') : '#165DFF';
                 const targetNames = (msg.target_team_ids ?? [])
                   .map((tid) => room.members.find((m) => m.team_id === tid)?.team_name ?? tid)
                   .filter(Boolean);
@@ -767,7 +745,10 @@ const SharedRoomPage: React.FC = () => {
                         <span>{msg.sender_label || 'Anh'}</span>
                         <span>• {formatShortTime(msg.created_at)}</span>
                       </div>
-                      <div className='max-w-[78%] rd-12px rd-tr-2px bg-primary-6 text-white px-14px py-10px shadow-sm flex flex-col gap-8px'>
+                      <div
+                        className='max-w-[78%] rd-12px rd-tr-2px px-14px py-10px shadow-sm flex flex-col gap-8px'
+                        style={{ backgroundColor: '#165DFF', color: '#FFFFFF' }}
+                      >
                         {replied && (
                           <div className='rd-6px bg-black/15 px-8px py-4px text-11px opacity-90 truncate'>
                             ↩ Trả lời <b>{replied.sender_label}</b>: {replied.content.slice(0, 90)}
@@ -832,7 +813,7 @@ const SharedRoomPage: React.FC = () => {
                       </div>
 
                       <div
-                        className='rd-12px rd-tl-2px bg-fill-2 px-14px py-10px border border-solid border-border-2 flex flex-col gap-8px'
+                        className='rd-12px rd-tl-2px bg-fill-2 px-14px py-10px border border-solid border-arco-2 flex flex-col gap-8px'
                         style={{ borderLeftWidth: 3, borderLeftColor: accent }}
                       >
                         {replied && (
@@ -867,7 +848,7 @@ const SharedRoomPage: React.FC = () => {
           </div>
 
           {/* Composer */}
-          <div className='shrink-0 border-t border-border-2 px-16px py-10px bg-bg-1 flex flex-col gap-8px'>
+          <div className='shrink-0 border-t border-arco-2 px-16px py-10px bg-bg-1 flex flex-col gap-8px'>
             {replyToMsg && (
               <div className='flex items-center justify-between gap-8px rd-6px bg-fill-2 px-10px py-5px text-12px'>
                 <span className='truncate text-t-secondary'>
@@ -905,7 +886,7 @@ const SharedRoomPage: React.FC = () => {
               <span className='text-11px text-t-tertiary'>Gọi nhanh:</span>
               <button
                 type='button'
-                className='px-7px py-2px rd-999px text-11px bg-fill-2 hover:bg-fill-3 text-t-secondary border border-solid border-border-2 cursor-pointer'
+                className='px-7px py-2px rd-999px text-11px bg-fill-2 hover:bg-fill-3 text-t-secondary border border-solid border-arco-2 cursor-pointer'
                 onClick={() => insertMention('all')}
               >
                 @all
@@ -916,7 +897,7 @@ const SharedRoomPage: React.FC = () => {
                   <button
                     key={m.team_id}
                     type='button'
-                    className='px-7px py-2px rd-999px text-11px bg-fill-2 hover:bg-fill-3 text-t-secondary border border-solid border-border-2 cursor-pointer'
+                    className='px-7px py-2px rd-999px text-11px bg-fill-2 hover:bg-fill-3 text-t-secondary border border-solid border-arco-2 cursor-pointer'
                     onClick={() => insertMention(slug)}
                   >
                     @{slug}
@@ -927,11 +908,7 @@ const SharedRoomPage: React.FC = () => {
 
             <div className='flex items-end gap-8px'>
               <Tooltip content='Đính kèm file vào kho Shared Artifacts & hộp thư chung của các Team'>
-                <Button
-                  type='secondary'
-                  onClick={() => void handlePickFiles()}
-                  className='!h-36px !px-10px shrink-0'
-                >
+                <Button type='secondary' onClick={() => void handlePickFiles()} className='!h-36px !px-10px shrink-0'>
                   📎
                 </Button>
               </Tooltip>
@@ -952,7 +929,7 @@ const SharedRoomPage: React.FC = () => {
                     void handleSendMessage();
                   }
                 }}
-                className='flex-1 min-w-0 rd-8px border border-solid border-border-2 bg-fill-1 px-12px py-8px text-13px text-t-primary resize-none focus:outline-none focus:border-primary-6'
+                className='flex-1 min-w-0 rd-8px border border-solid border-arco-2 bg-fill-1 px-12px py-8px text-13px text-t-primary resize-none focus:outline-none focus:border-primary-6'
               />
 
               <Button
@@ -971,8 +948,8 @@ const SharedRoomPage: React.FC = () => {
 
         {/* Right Panel: Cross-Team Task Board & Shared Artifacts */}
         {rightPanelOpen && (
-          <aside className='w-350px shrink-0 border-s border-border-2 bg-bg-1 flex flex-col h-full'>
-            <div className='shrink-0 border-b border-border-2 px-12px py-8px flex items-center justify-between gap-6px'>
+          <aside className='w-350px shrink-0 border-s border-arco-2 bg-bg-1 flex flex-col h-full'>
+            <div className='shrink-0 border-b border-arco-2 px-12px py-8px flex items-center justify-between gap-6px'>
               <div className='flex items-center gap-4px'>
                 <button
                   type='button'
@@ -1038,7 +1015,7 @@ const SharedRoomPage: React.FC = () => {
                     return (
                       <div
                         key={task.id}
-                        className='rd-8px border border-solid border-border-2 bg-fill-1 p-10px flex flex-col gap-6px'
+                        className='rd-8px border border-solid border-arco-2 bg-fill-1 p-10px flex flex-col gap-6px'
                       >
                         <div className='flex items-start justify-between gap-6px'>
                           <span className='text-13px font-600 leading-18px'>{task.title}</span>
@@ -1100,7 +1077,7 @@ const SharedRoomPage: React.FC = () => {
                 allArtifacts.map(({ artifact, sourceLabel, createdAt }) => (
                   <div
                     key={artifact.staged_path}
-                    className='rd-8px border border-solid border-border-2 bg-fill-1 p-10px flex flex-col gap-6px'
+                    className='rd-8px border border-solid border-arco-2 bg-fill-1 p-10px flex flex-col gap-6px'
                   >
                     <ArtifactCard artifact={artifact} />
                     <span className='text-11px text-t-tertiary'>
@@ -1242,11 +1219,7 @@ const SharedRoomPage: React.FC = () => {
             {taskFiles.length > 0 && (
               <div className='flex flex-wrap gap-6px'>
                 {taskFiles.map((fp) => (
-                  <Tag
-                    key={fp}
-                    closable
-                    onClose={() => setTaskFiles((prev) => prev.filter((item) => item !== fp))}
-                  >
+                  <Tag key={fp} closable onClose={() => setTaskFiles((prev) => prev.filter((item) => item !== fp))}>
                     {fp.split(/[\\/]/).pop() ?? fp}
                   </Tag>
                 ))}

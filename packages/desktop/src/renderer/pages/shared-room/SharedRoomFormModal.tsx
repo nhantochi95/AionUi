@@ -18,13 +18,7 @@ interface SharedRoomFormModalProps {
   onSaved: (room: ISharedRoom) => void;
 }
 
-const SharedRoomFormModal: React.FC<SharedRoomFormModalProps> = ({
-  visible,
-  mode,
-  initialRoom,
-  onClose,
-  onSaved,
-}) => {
+const SharedRoomFormModal: React.FC<SharedRoomFormModalProps> = ({ visible, mode, initialRoom, onClose, onSaved }) => {
   const { teams } = useTeamList();
 
   const [name, setName] = useState('');
@@ -55,10 +49,7 @@ const SharedRoomFormModal: React.FC<SharedRoomFormModalProps> = ({
     }
   }, [initialRoom, mode, visible]);
 
-  const selectedTeams = useMemo(
-    () => teams.filter((t) => selectedTeamIds.includes(t.id)),
-    [teams, selectedTeamIds]
-  );
+  const selectedTeams = useMemo(() => teams.filter((t) => selectedTeamIds.includes(t.id)), [teams, selectedTeamIds]);
 
   useEffect(() => {
     if (selectedTeamIds.length === 0) {
@@ -146,7 +137,7 @@ const SharedRoomFormModal: React.FC<SharedRoomFormModalProps> = ({
       }
     >
       <div className='flex flex-col gap-14px text-t-primary'>
-        <div className='text-12px text-t-secondary leading-18px bg-fill-1 rd-8px px-12px py-8px border border-border-2'>
+        <div className='text-12px text-t-secondary leading-18px bg-fill-1 rd-8px px-12px py-8px border border-solid border-arco-2'>
           Mỗi Team tham gia sẽ cử <b>Leader 👑</b> đại diện ngồi trong phòng chung cùng anh để trao đổi chéo, chuyển
           giao file qua <code>Shared Artifacts</code> và giao nhận task liên team (có hỗ trợ đồng bộ qua Telegram).
         </div>
@@ -182,9 +173,7 @@ const SharedRoomFormModal: React.FC<SharedRoomFormModalProps> = ({
                 type='button'
                 className='text-12px text-primary-6 bg-transparent border-0 cursor-pointer hover:underline p-0'
                 onClick={() =>
-                  setSelectedTeamIds(
-                    selectedTeamIds.length === teams.length ? [] : teams.map((item) => item.id)
-                  )
+                  setSelectedTeamIds(selectedTeamIds.length === teams.length ? [] : teams.map((item) => item.id))
                 }
               >
                 {selectedTeamIds.length === teams.length ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
@@ -193,15 +182,14 @@ const SharedRoomFormModal: React.FC<SharedRoomFormModalProps> = ({
           </div>
 
           {teams.length === 0 ? (
-            <div className='rd-8px border border-dashed border-border-2 p-16px text-center text-12px text-t-tertiary'>
+            <div className='rd-8px border border-dashed border-arco-2 p-16px text-center text-12px text-t-tertiary'>
               Chưa có Team nào. Hãy tạo ít nhất 1 Team ở mục Teams trước.
             </div>
           ) : (
-            <div className='max-h-180px overflow-y-auto rd-8px border border-border-2 divide-y divide-border-1'>
+            <div className='max-h-180px overflow-y-auto rd-8px border border-solid border-arco-2 divide-y divide-arco-1'>
               {teams.map((tItem) => {
                 const checked = selectedTeamIds.includes(tItem.id);
-                const leader =
-                  tItem.assistants.find((a) => a.role === 'leader') ?? tItem.assistants[0];
+                const leader = tItem.assistants.find((a) => a.role === 'leader') ?? tItem.assistants[0];
                 return (
                   <div
                     key={tItem.id}

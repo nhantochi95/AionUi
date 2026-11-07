@@ -653,3 +653,47 @@ body[arco-theme='dark'] .arco-message-error {
   padding-bottom: 2px;
   background-color: var(--color-bg-popup);
 }
+
+/* Telegram Bridge & Shared Room Popover sizing, borders, and active switch contrast.
+ * Arco's Popover defaults to inline maxWidth: 350px with 16px horizontal padding,
+ * which caused 320px–340px inner panels to overflow past the right card border. */
+html body .aion-telegram-bridge-popover {
+  width: 384px !important;
+  max-width: calc(100vw - 24px) !important;
+  box-sizing: border-box !important;
+}
+
+html body .aion-telegram-bridge-popover .arco-popover-content {
+  width: 100% !important;
+  max-width: none !important;
+  padding: 14px 16px !important;
+  border-radius: 12px !important;
+  box-sizing: border-box !important;
+}
+
+html body .aion-telegram-bridge-popover .arco-popover-content-inner,
+html body .aion-telegram-bridge-popover .arco-popover-inner,
+html body .aion-telegram-bridge-popover .arco-popover-inner-content {
+  width: 100% !important;
+  max-width: none !important;
+  box-sizing: border-box !important;
+}
+
+html body .aion-telegram-bridge-popover .arco-switch-checked:not(.arco-switch-disabled),
+html body .aion-tg-switch.arco-switch-checked:not(.arco-switch-disabled) {
+  background-color: #2aabee !important;
+}
+
+html body .aion-telegram-bridge-popover .arco-select-view,
+html body .aion-telegram-bridge-popover .arco-input-inner-wrapper,
+html body .aion-telegram-bridge-popover .arco-input {
+  border: 1px solid var(--aion-overlay-border) !important;
+  border-radius: 8px !important;
+  box-sizing: border-box !important;
+}
+
+html body .aion-telegram-bridge-popover .arco-select-view:hover,
+html body .aion-telegram-bridge-popover .arco-input-inner-wrapper:hover,
+html body .aion-telegram-bridge-popover .arco-input:hover {
+  border-color: #2aabee !important;
+}

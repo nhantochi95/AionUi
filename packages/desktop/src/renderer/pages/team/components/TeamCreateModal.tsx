@@ -211,12 +211,22 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
       <div className='text-13px font-500 leading-20px text-t-secondary'>Telegram</div>
       <div className='flex flex-wrap items-center gap-12px text-12px text-t-secondary'>
         <label className='inline-flex items-center gap-6px cursor-pointer select-none'>
-          <Switch size='small' checked={enableTelegramBridge} onChange={setEnableTelegramBridge} />
+          <Switch
+            size='small'
+            className='aion-tg-switch'
+            checked={enableTelegramBridge}
+            onChange={setEnableTelegramBridge}
+          />
           <span>Leader báo cáo chủ động</span>
         </label>
         {enableTelegramBridge && (
           <label className='inline-flex items-center gap-6px cursor-pointer select-none text-t-tertiary'>
-            <Switch size='small' checked={setTelegramDmDefault} onChange={setSetTelegramDmDefault} />
+            <Switch
+              size='small'
+              className='aion-tg-switch'
+              checked={setTelegramDmDefault}
+              onChange={setSetTelegramDmDefault}
+            />
             <span>Đặt làm chat DM hiện tại</span>
           </label>
         )}

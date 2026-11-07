@@ -21,8 +21,8 @@ const os = require('os');
 const path = require('path');
 const { verifyBundledAioncoreResources } = require('./verify-bundled-aioncore-resources');
 
-const GITHUB_OWNER = 'iOfficeAI';
-const GITHUB_REPO = 'AionCore';
+const GITHUB_OWNER = (process.env.AIONUI_BACKEND_GITHUB_OWNER || 'iOfficeAI').trim();
+const GITHUB_REPO = (process.env.AIONUI_BACKEND_GITHUB_REPO || 'AionCore').trim();
 
 const ACTIONS_ARTIFACT_TARGETS = {
   'darwin-arm64': {
@@ -444,9 +444,10 @@ function prepareAioncore(options) {
   const { projectRoot, platform, arch, version = 'latest' } = options;
   const runtimeKey = `${platform}-${arch}`;
   const actionsRunId = (process.env.AIONUI_BACKEND_RUN_ID || '').trim();
+  const hasLocalPriorityOverride = Boolean((process.env.AIONUI_LOCAL_AIONCORE_BIN || '').trim());
 
   let tag = null;
-  if (!actionsRunId) {
+  if (!actionsRunId && !hasLocalPriorityOverride) {
     // Resolve the actual version tag — release asset filenames include the tag.
     if (version === 'latest') {
       const resolved = resolveLatestTag();
@@ -575,7 +576,7 @@ function prepareAioncore(options) {
     const manifest = {
       platform,
       arch,
-      version: tag || `actions-run-${actionsRunId}`,
+      version: tag || (actionsRunId ? `actions-run-${actionsRunId}` : 'custom-local'),
       generatedAt: new Date().toISOString(),
       sourceType,
       source: sourceDetail,

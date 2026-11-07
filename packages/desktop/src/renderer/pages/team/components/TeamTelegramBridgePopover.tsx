@@ -198,26 +198,28 @@ const TeamTelegramBridgePopover: React.FC<TeamTelegramBridgePopoverProps> = ({ t
       : 'bg-fill-4';
 
   const popoverContent = (
-    <div className='w-340px flex flex-col gap-12px p-4px text-t-primary'>
-      <div className='flex items-center justify-between gap-8px border-b border-border-2 pb-10px'>
-        <div className='flex items-center gap-8px min-w-0'>
-          <span className='inline-flex w-26px h-26px rd-6px items-center justify-center bg-[#2AABEE]/15 text-[#2AABEE] shrink-0'>
+    <div className='w-full min-w-0 box-border flex flex-col gap-12px text-t-primary'>
+      <div className='flex items-center justify-between gap-8px border-b border-arco-2 pb-10px min-w-0'>
+        <div className='flex items-center gap-8px min-w-0 flex-1'>
+          <span className='inline-flex w-28px h-28px rd-8px items-center justify-center bg-[#2AABEE]/15 text-[#2AABEE] shrink-0'>
             <TelegramPaperPlaneIcon size={15} />
           </span>
-          <div className='flex flex-col min-w-0'>
+          <div className='flex flex-col min-w-0 flex-1'>
             <span className='text-13px font-600 truncate'>Cầu nối Telegram · Leader 👑</span>
             <span className='text-11px text-t-tertiary truncate'>Team: {teamName}</span>
           </div>
         </div>
-        {config?.telegram_connected ? (
-          <Tag size='small' color={config.has_authorized_user ? 'green' : 'orangered'}>
-            {config.bot_username ? `@${config.bot_username}` : 'Đã kết nối'}
-          </Tag>
-        ) : (
-          <Tag size='small' color='gray'>
-            Chưa bật Bot
-          </Tag>
-        )}
+        <span className='shrink-0 inline-flex items-center'>
+          {config?.telegram_connected ? (
+            <Tag size='small' color={config.has_authorized_user ? 'green' : 'orangered'}>
+              {config.bot_username ? `@${config.bot_username}` : 'Đã kết nối'}
+            </Tag>
+          ) : (
+            <Tag size='small' color='gray'>
+              Chưa bật Bot
+            </Tag>
+          )}
+        </span>
       </div>
 
       {isLoading && !config ? (
@@ -227,8 +229,8 @@ const TeamTelegramBridgePopover: React.FC<TeamTelegramBridgePopoverProps> = ({ t
       ) : (
         <>
           {(!config?.telegram_plugin_enabled || !config?.has_authorized_user) && (
-            <div className='rd-8px bg-fill-2 p-10px flex flex-col gap-8px text-12px'>
-              <span className='text-t-secondary leading-18px'>
+            <div className='rd-8px bg-fill-2 border border-solid border-arco-2 p-10px flex flex-col gap-8px text-12px box-border'>
+              <span className='text-t-secondary leading-18px break-words'>
                 {!config?.telegram_plugin_enabled
                   ? 'Bot Telegram chưa được bật. Hãy bật Telegram trong Cài đặt WebUI / Kênh để dùng chung 1 Bot cho toàn bộ các Team.'
                   : 'Bot đã bật nhưng chưa ghép đôi tài khoản Telegram của anh. Hãy nhắn cho Bot để lấy mã ghép đôi.'}
@@ -246,15 +248,16 @@ const TeamTelegramBridgePopover: React.FC<TeamTelegramBridgePopoverProps> = ({ t
             </div>
           )}
 
-          <div className='flex items-center justify-between gap-10px'>
-            <div className='flex flex-col gap-2px'>
+          <div className='flex items-center justify-between gap-12px w-full min-w-0'>
+            <div className='flex flex-col gap-2px min-w-0 flex-1'>
               <span className='text-13px font-500'>Báo cáo chủ động từ Leader</span>
-              <span className='text-11px text-t-tertiary leading-16px'>
+              <span className='text-11px text-t-tertiary leading-16px break-words'>
                 Leader tự gửi tiến độ, câu hỏi xin duyệt, lỗi member & kết quả về điện thoại
               </span>
             </div>
             <Switch
               size='small'
+              className='shrink-0 aion-tg-switch'
               data-testid='team-tg-notify-switch'
               checked={Boolean(config?.notify_enabled)}
               loading={saving}
@@ -262,15 +265,16 @@ const TeamTelegramBridgePopover: React.FC<TeamTelegramBridgePopoverProps> = ({ t
             />
           </div>
 
-          <div className='flex items-center justify-between gap-10px'>
-            <div className='flex flex-col gap-2px'>
+          <div className='flex items-center justify-between gap-12px w-full min-w-0'>
+            <div className='flex flex-col gap-2px min-w-0 flex-1'>
               <span className='text-13px font-500'>Chat chính trên DM 1-1</span>
-              <span className='text-11px text-t-tertiary leading-16px'>
+              <span className='text-11px text-t-tertiary leading-16px break-words'>
                 Nhắn riêng với Bot sẽ vào thẳng Leader của Team này (hoặc gõ <code>/team</code> / vuốt Reply)
               </span>
             </div>
             <Switch
               size='small'
+              className='shrink-0 aion-tg-switch'
               data-testid='team-tg-dm-switch'
               checked={Boolean(config?.is_active_dm_target)}
               disabled={!config?.has_authorized_user}
@@ -279,13 +283,16 @@ const TeamTelegramBridgePopover: React.FC<TeamTelegramBridgePopoverProps> = ({ t
             />
           </div>
 
-          <div className='flex flex-col gap-4px'>
+          <div className='flex flex-col gap-5px w-full min-w-0'>
             <span className='text-12px font-500 text-t-secondary'>Chế độ lọc thông báo</span>
             <Select
               size='small'
+              className='w-full'
               data-testid='team-tg-stream-select'
               value={(config?.stream_mode as TeamTelegramStreamMode) || 'milestones'}
               disabled={saving}
+              triggerProps={{ autoFitPosition: true }}
+              getPopupContainer={(node) => (node.closest('.arco-popover') as Element | null) || document.body}
               onChange={(val) => void handleStreamModeChange(val as TeamTelegramStreamMode)}
             >
               <Select.Option value='milestones'>Milestones — Lọc thông minh (Khuyên dùng)</Select.Option>
@@ -293,20 +300,20 @@ const TeamTelegramBridgePopover: React.FC<TeamTelegramBridgePopoverProps> = ({ t
             </Select>
           </div>
 
-          <div className='border-t border-border-2 pt-8px flex flex-col gap-8px'>
+          <div className='border-t border-arco-2 pt-8px flex flex-col gap-8px w-full min-w-0'>
             <div
               data-testid='team-tg-group-toggle'
-              className='flex items-center justify-between cursor-pointer select-none text-12px text-t-secondary hover:text-t-primary'
+              className='flex items-center justify-between gap-8px cursor-pointer select-none text-12px text-t-secondary hover:text-t-primary min-w-0'
               onClick={() => setShowGroupSection((v) => !v)}
             >
-              <span className='font-500'>
+              <span className='font-500 truncate min-w-0 flex-1'>
                 Gắn Nhóm / Supergroup Topic riêng {config?.group_chat_id ? '• Đã gắn' : '(Tuỳ chọn)'}
               </span>
-              <span className='text-11px text-t-tertiary'>{showGroupSection ? 'Thu gọn' : 'Mở rộng'}</span>
+              <span className='text-11px text-t-tertiary shrink-0'>{showGroupSection ? 'Thu gọn' : 'Mở rộng'}</span>
             </div>
 
             {showGroupSection && (
-              <div className='flex flex-col gap-8px rd-8px bg-fill-1 p-8px border border-border-2'>
+              <div className='flex flex-col gap-8px rd-8px bg-fill-1 p-8px border border-solid border-arco-2 box-border'>
                 <Input
                   size='small'
                   data-testid='team-tg-group-chat-input'
@@ -347,7 +354,7 @@ const TeamTelegramBridgePopover: React.FC<TeamTelegramBridgePopoverProps> = ({ t
             )}
           </div>
 
-          <div className='rd-6px bg-fill-1 px-8px py-6px text-11px text-t-tertiary leading-16px'>
+          <div className='w-full box-border rd-8px bg-fill-1 border border-solid border-arco-2 px-10px py-8px text-11px text-t-secondary leading-16px break-words'>
             Mẹo trên Telegram: gõ <code>/team</code> đổi Team, <code>/room</code> vào Phòng Họp Liên Team,{' '}
             <code>/status</code> xem Task Board, hoặc <b>vuốt Reply</b> vào bất kỳ báo cáo nào để giao việc lại đúng
             Leader đó.
@@ -361,6 +368,8 @@ const TeamTelegramBridgePopover: React.FC<TeamTelegramBridgePopoverProps> = ({ t
     <Popover
       trigger='click'
       position='br'
+      className='aion-telegram-bridge-popover'
+      style={{ width: 384, maxWidth: 'calc(100vw - 24px)' }}
       popupVisible={visible}
       onVisibleChange={(next) => {
         setVisible(next);
@@ -372,7 +381,7 @@ const TeamTelegramBridgePopover: React.FC<TeamTelegramBridgePopoverProps> = ({ t
         <button
           type='button'
           data-testid='team-telegram-bridge-btn'
-          className='h-28px px-10px rd-8px inline-flex items-center gap-6px text-12px font-500 bg-fill-2 hover:bg-fill-3 active:bg-fill-4 text-t-primary border border-solid border-border-2 cursor-pointer transition-colors shrink-0'
+          className='h-28px px-10px rd-8px inline-flex items-center gap-6px text-12px font-500 bg-fill-2 hover:bg-fill-3 active:bg-fill-4 text-t-primary border border-solid border-arco-2 cursor-pointer transition-colors shrink-0'
         >
           <span className='text-[#2AABEE] inline-flex items-center'>
             <TelegramPaperPlaneIcon size={13} />
