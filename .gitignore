@@ -173,7 +173,7 @@ wiki/
 desdoc/
 
 # Local kanban (协作工作簿，不入库)
-kanban/
+/kanban/
 
 # E2E test artifacts (Playwright)
 tests/e2e/screenshots/

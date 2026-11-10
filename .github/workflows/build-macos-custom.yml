@@ -68,6 +68,7 @@ jobs:
         with:
           workspaces: '${{ runner.temp }}/aioncore-src -> target'
           shared-key: custom-aioncore-${{ matrix.rust_target }}
+          cache-on-failure: true
 
       - name: Compile custom AionCore (${{ matrix.rust_target }})
         shell: bash
