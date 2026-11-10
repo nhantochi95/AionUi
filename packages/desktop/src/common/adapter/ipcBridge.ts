@@ -1504,6 +1504,8 @@ export const theme = {
 // System Settings — routed to /api/settings/* unless they need Electron-native side effects.
 // ---------------------------------------------------------------------------
 
+const electronChangeLanguage = bridge.buildProvider<void, { language: string }>('system-settings:change-language');
+
 export const systemSettings = {
   getCloseToTray: bridge.buildProvider<boolean, void>('system-settings:get-close-to-tray'),
   setCloseToTray: bridge.buildProvider<void, { enabled: boolean }>('system-settings:set-close-to-tray'),
@@ -1517,7 +1519,21 @@ export const systemSettings = {
   })),
   getKeepAwake: httpGetClientSetting<boolean>('keepAwake'),
   setKeepAwake: httpPut<void, { enabled: boolean }>('/api/settings/client', (p) => ({ keepAwake: p.enabled })),
-  changeLanguage: httpPatch<void, { language: string }>('/api/settings', (p) => ({ language: p.language })),
+  changeLanguage: {
+    provider: electronChangeLanguage.provider,
+    invoke: async (p: { language: string }): Promise<void> => {
+      // 1. Update backend system settings via HTTP
+      await httpRequest<void>('PATCH', '/api/settings', { language: p.language }).catch((err) => {
+        console.warn('[ipcBridge] Backend PATCH /api/settings language update failed:', err);
+      });
+      // 2. Dispatch to Electron main process if running in desktop app
+      if (typeof window !== 'undefined' && Boolean((window as { electronAPI?: unknown }).electronAPI)) {
+        await electronChangeLanguage.invoke({ language: p.language }).catch((err) => {
+          console.warn('[ipcBridge] Electron changeLanguage invoke failed:', err);
+        });
+      }
+    },
+  },
   // Cross-session messaging master switch. NOTE the channel differs from the
   // sibling switches above: this one is a TYPED COLUMN on `system_settings`
   // (migration 040), so it goes through `/api/settings`, not the
@@ -2596,3 +2612,48 @@ export const sidebar = {
     (p) => `/api/sidebar/archived/project/${encodeURIComponent(p.project_id)}`
   ),
 };
+
+// ---------------------------------------------------------------------------
+// Action Inbox (Cần Anh Duyệt) — routed to /api/inbox/*
+// ---------------------------------------------------------------------------
+
+export const inbox = {
+  list: httpGet<import('@/common/types/inbox').ActionInboxListResponse, void>('/api/inbox'),
+  resolve: httpPost<
+    import('@/common/types/inbox').ResolveActionInboxResponse,
+    { id: string; action: string; payload?: unknown }
+  >(
+    (p) => `/api/inbox/${encodeURIComponent(p.id)}/resolve`,
+    ({ id: _id, ...rest }) => rest
+  ),
+  itemAdded: wsEmitter<import('@/common/types/inbox').ActionInboxItemAddedEvent>('inbox:item_added'),
+  itemResolved: wsEmitter<import('@/common/types/inbox').ActionInboxItemResolvedEvent>('inbox:item_resolved'),
+};
+
+// ---------------------------------------------------------------------------
+// Git Worktrees — routed to /api/worktrees/*
+// ---------------------------------------------------------------------------
+
+export const worktrees = {
+  getDiff: httpGet<
+    { lease_id: string; branch_name: string; base_branch: string; files_changed: number; additions: number; deletions: number; patch: string },
+    { id: string }
+  >((p) => `/api/worktrees/${encodeURIComponent(p.id)}/diff`),
+  merge: httpPost<
+    { success: boolean; commit_hash?: string; leftovers_ref?: string },
+    { id: string }
+  >((p) => `/api/worktrees/${encodeURIComponent(p.id)}/merge`, () => ({})),
+};
+
+// ---------------------------------------------------------------------------
+// Dual Cost Wallets — routed to /api/wallets/*
+// ---------------------------------------------------------------------------
+
+export const wallets = {
+  summary: httpGet<
+    { api_key_budget_limit_usd: number; api_key_spent_usd: number; cli_subscription_runs: number; api_key_runs: number; soft_warning: boolean; hard_blocked: boolean },
+    void
+  >('/api/wallets/summary'),
+  spendUpdated: wsEmitter<{ spent_usd: number; soft_warning: boolean; hard_blocked: boolean }>('wallet:spend_updated'),
+};
+

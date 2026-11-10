@@ -71,6 +71,7 @@ import ptBR from '@arco-design/web-react/es/locale/pt-BR';
 import deDE from '@arco-design/web-react/es/locale/de-DE';
 import esES from '@arco-design/web-react/es/locale/es-ES';
 import frFR from '@arco-design/web-react/es/locale/fr-FR';
+import viVN from '@arco-design/web-react/es/locale/vi-VN';
 import { useTranslation } from 'react-i18next';
 
 // Styles
@@ -153,6 +154,90 @@ const completeArcoLocale = (locale: ArcoLocaleInput): typeof enUS => ({
   ColorPicker: locale.ColorPicker ?? enUS.ColorPicker,
 });
 
+function deepNormalizeNfc<T>(obj: T): T {
+  if (typeof obj === 'string') {
+    return obj.normalize('NFC') as unknown as T;
+  }
+  if (typeof obj === 'object' && obj !== null) {
+    if (Array.isArray(obj)) {
+      return obj.map(deepNormalizeNfc) as unknown as T;
+    }
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj)) {
+      result[key] = deepNormalizeNfc(value);
+    }
+    return result as T;
+  }
+  return obj;
+}
+
+const customViVN = deepNormalizeNfc(
+  completeArcoLocale({
+    ...viVN,
+    DatePicker: {
+      ...viVN.DatePicker,
+      placeholder: {
+        ...viVN.DatePicker?.placeholder,
+        quarter: 'Vui lòng chọn quý',
+      },
+      placeholders: {
+        ...viVN.DatePicker?.placeholders,
+        quarter: ['Quý đầu', 'Quý cuối'],
+      },
+      selectTime: 'Chọn thời gian',
+      selectDate: 'Chọn ngày',
+      ok: 'Xác nhận',
+    },
+    Drawer: {
+      okText: 'Xác nhận',
+      cancelText: 'Hủy',
+    },
+    Modal: {
+      okText: 'Xác nhận',
+      cancelText: 'Hủy',
+    },
+    Pagination: {
+      ...viVN.Pagination,
+      goto: 'Đến trang',
+      page: 'trang',
+      prevSomePages: 'Lùi {0} trang',
+      nextSomePages: 'Tiến {0} trang',
+    },
+    Popconfirm: {
+      okText: 'Xác nhận',
+      cancelText: 'Hủy',
+    },
+    Table: {
+      ...viVN.Table,
+      okText: 'Xác nhận',
+      resetText: 'Đặt lại',
+    },
+    TimePicker: {
+      ...viVN.TimePicker,
+      ok: 'Xác nhận',
+    },
+    Progress: {
+      ...viVN.Progress,
+      success: 'Thành công',
+    },
+    Upload: {
+      ...viVN.Upload,
+      start: 'Bắt đầu',
+      cancel: 'Hủy',
+      delete: 'Xóa',
+      drag: 'Nhấp hoặc kéo thả tệp vào đây để tải lên',
+      dragHover: 'Thả tệp để bắt đầu tải lên',
+      error: 'Tải lên thất bại',
+    },
+    Typography: {
+      ...viVN.Typography,
+      fold: 'Thu gọn',
+      unfold: 'Mở rộng',
+      edit: 'Chỉnh sửa',
+    },
+  })
+);
+
 // Every language AionUi ships that Arco publishes a locale for. Arco has no
 // uk-UA or fa-IR locale; those fall back to English component strings.
 const arcoLocales: Record<string, typeof enUS> = {
@@ -167,6 +252,7 @@ const arcoLocales: Record<string, typeof enUS> = {
   'de-DE': completeArcoLocale(deDE),
   'es-ES': completeArcoLocale(esES),
   'fr-FR': completeArcoLocale(frFR),
+  'vi-VN': customViVN,
 };
 
 const INSTALLATION_INTEGRITY_FAILURES = new Set<RuntimeFailureKind>([

@@ -33,7 +33,7 @@ const getInitialLanguage = async (): Promise<string> => {
   } catch {
     // Fall through
   }
-  return detectDeviceLanguage();
+  return 'en-US';
 };
 
 i18n.use(initReactI18next);

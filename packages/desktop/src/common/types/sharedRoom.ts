@@ -136,6 +136,8 @@ export interface ISendSharedRoomMessageParams {
   mentions?: string[];
   files?: string[];
   reply_to_id?: string | null;
+  wake_targets?: string[];
+  live_steering?: boolean;
 }
 
 export interface ISendSharedRoomMessageResult {

@@ -14,16 +14,19 @@ describe('i18n', () => {
       expect(normalizeLanguageCode('zh-CN')).toBe('zh-CN');
       expect(normalizeLanguageCode('de-DE')).toBe('de-DE');
       expect(normalizeLanguageCode('fa-IR')).toBe('fa-IR');
+      expect(normalizeLanguageCode('vi-VN')).toBe('vi-VN');
     });
 
     it('normalizes underscores to hyphens', () => {
       expect(normalizeLanguageCode('de_DE')).toBe('de-DE');
       expect(normalizeLanguageCode('fa_IR')).toBe('fa-IR');
       expect(normalizeLanguageCode('pt_BR')).toBe('pt-BR');
+      expect(normalizeLanguageCode('vi_VN')).toBe('vi-VN');
     });
 
     it('resolves base language codes to their supported region', () => {
       expect(normalizeLanguageCode('zh')).toBe('zh-CN');
+      expect(normalizeLanguageCode('vi')).toBe('vi-VN');
     });
 
     it('maps Traditional-script regions and Hant tags to zh-TW, not Simplified', () => {
@@ -44,6 +47,7 @@ describe('i18n', () => {
       expect(normalizeLanguageCode('es')).toBe('es-ES');
       expect(normalizeLanguageCode('fr')).toBe('fr-FR');
       expect(normalizeLanguageCode('fa')).toBe('fa-IR');
+      expect(normalizeLanguageCode('vi')).toBe('vi-VN');
     });
 
     it('resolves German regional variants to de-DE', () => {

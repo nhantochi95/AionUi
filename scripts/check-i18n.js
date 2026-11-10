@@ -380,6 +380,34 @@ function checkIndexConfig() {
   logSuccess('i18n configuration check passed');
 }
 
+// Validate canonical Unicode NFC normalization across all translation files
+function checkUnicodeNfc() {
+  console.log('\n🔤 Checking canonical Unicode NFC normalization...\n');
+
+  let nonNfcCount = 0;
+
+  for (const lang of SUPPORTED_LANGUAGES) {
+    const langDir = path.join(LOCALES_DIR, lang);
+    if (!fs.existsSync(langDir)) continue;
+
+    for (const moduleName of REQUIRED_MODULES) {
+      const moduleFile = path.join(langDir, `${moduleName}.json`);
+      if (fs.existsSync(moduleFile)) {
+        const raw = fs.readFileSync(moduleFile, 'utf-8');
+        const normalized = raw.normalize('NFC');
+        if (raw !== normalized) {
+          logError(`File not in canonical Unicode NFC form: ${lang}/${moduleName}.json`);
+          nonNfcCount++;
+        }
+      }
+    }
+  }
+
+  if (nonNfcCount === 0) {
+    logSuccess('All translation files satisfy canonical Unicode NFC normalization');
+  }
+}
+
 function main() {
   console.log('\n🔍 i18n validation started\n');
   console.log('========================================');
@@ -390,6 +418,7 @@ function main() {
   checkLiteralKeyUsages();
   checkI18nTypeDefinitionInSync();
   checkIndexConfig();
+  checkUnicodeNfc();
 
   console.log('\n========================================');
   console.log('\n📊 Validation summary:\n');

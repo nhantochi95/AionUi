@@ -395,7 +395,7 @@ const ArchivedSettings: React.FC = () => {
   const formatArchivedTime = React.useCallback(
     (timestamp?: number) => {
       if (!timestamp) return '';
-      return new Intl.DateTimeFormat(i18n.language || 'zh-CN', {
+      return new Intl.DateTimeFormat(i18n.language || 'en-US', {
         year: 'numeric',
         month: 'long',
         day: 'numeric',

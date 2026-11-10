@@ -15,6 +15,7 @@ const isTouchPrimaryInput = (): boolean =>
 export const useCompositionInput = () => {
   const isComposing = useRef(false);
   const [isComposingState, setIsComposingState] = useState(false);
+  const lastCompositionEndTime = useRef<number>(0);
 
   const compositionHandlers = {
     onCompositionStartCapture: () => {
@@ -24,14 +25,16 @@ export const useCompositionInput = () => {
     onCompositionEndCapture: () => {
       isComposing.current = false;
       setIsComposingState(false);
+      lastCompositionEndTime.current = Date.now();
     },
   };
 
   const createKeyDownHandler = (onEnterPress: () => void, onKeyDownIntercept?: (e: React.KeyboardEvent) => boolean) => {
     return (e: React.KeyboardEvent) => {
-      // Safari can dispatch compositionend before the keydown that confirms
-      // the IME candidate, so the ref may already be false at this point.
+      // Safari and Chromium can dispatch compositionend before the keydown that confirms
+      // the IME candidate, so the ref and native flag may already be false at this point.
       if (isComposing.current || e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) return;
+      if (Date.now() - lastCompositionEndTime.current < 60) return;
       if (onKeyDownIntercept?.(e)) return;
       if (e.key === 'Enter' && !e.shiftKey) {
         if (isTouchPrimaryInput()) return;

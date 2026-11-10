@@ -91,7 +91,7 @@ describe('useCompositionInput Enter handling', () => {
     expect(onEnterPress).not.toHaveBeenCalled();
   });
 
-  it('sends once for Enter after composition has ended', () => {
+  it('does not send when Enter is pressed immediately (<60ms) after compositionend (Vietnamese IME commit guard)', () => {
     const { result } = renderHook(() => useCompositionInput());
     const onEnterPress = vi.fn();
     const onKeyDown = result.current.createKeyDownHandler(onEnterPress);
@@ -102,7 +102,33 @@ describe('useCompositionInput Enter handling', () => {
       onKeyDown(createKeyDownEvent());
     });
 
-    expect(onEnterPress).toHaveBeenCalledTimes(1);
+    expect(onEnterPress).not.toHaveBeenCalled();
+  });
+
+  it('sends once for Enter after the 60ms IME guard window has elapsed', () => {
+    vi.useFakeTimers();
+    try {
+      const { result } = renderHook(() => useCompositionInput());
+      const onEnterPress = vi.fn();
+      const onKeyDown = result.current.createKeyDownHandler(onEnterPress);
+
+      act(() => {
+        result.current.compositionHandlers.onCompositionStartCapture();
+        result.current.compositionHandlers.onCompositionEndCapture();
+      });
+
+      act(() => {
+        vi.advanceTimersByTime(70);
+      });
+
+      act(() => {
+        onKeyDown(createKeyDownEvent());
+      });
+
+      expect(onEnterPress).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('sends for regular Enter', () => {

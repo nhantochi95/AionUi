@@ -29,6 +29,7 @@ import deDE from '@renderer/services/i18n/locales/de-DE/index';
 import esES from '@renderer/services/i18n/locales/es-ES/index';
 import frFR from '@renderer/services/i18n/locales/fr-FR/index';
 import faIR from '@renderer/services/i18n/locales/fa-IR/index';
+import viVN from '@renderer/services/i18n/locales/vi-VN/index';
 
 // All locale data keyed by language code.
 // NOTE: When adding a new language, add a static import above and an entry here.
@@ -48,6 +49,7 @@ const localeData: LocaleData = {
   'es-ES': esES,
   'fr-FR': frFR,
   'fa-IR': faIR,
+  'vi-VN': viVN,
 };
 
 const fallbackData = localeData[DEFAULT_LANGUAGE] ?? {};

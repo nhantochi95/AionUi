@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { PREVIEW_SCOPE_KEY_PREFIX } from '@/renderer/pages/conversation/Preview/context/previewScope';
 import { refreshSession } from '@/common/adapter/sessionRefresh';
+import { configService } from '@/common/config/configService';
 // M6: CSRF removed with legacy webserver — stub functions for compatibility, re-implement in M7
 const withCsrfToken = <T extends Record<string, unknown>>(data: T): T => data;
 const hasValidCsrfToken = (): boolean => true;
@@ -237,6 +238,14 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       setUser(data.user);
       setStatus('authenticated');
       setReady(true);
+
+      // Re-persist language selected pre-auth (e.g. from login screen language dropdown) to backend settings
+      if (typeof localStorage !== 'undefined') {
+        const preAuthLng = localStorage.getItem('i18nextLng');
+        if (preAuthLng) {
+          configService.set('language', preAuthLng).catch(() => {});
+        }
+      }
 
       // Re-enable WebSocket reconnection after successful login (WebUI mode only)
       if (typeof window !== 'undefined' && (window as any).__websocketReconnect) {

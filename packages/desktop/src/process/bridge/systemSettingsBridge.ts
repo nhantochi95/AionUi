@@ -16,7 +16,7 @@ import { ipcBridge } from '@/common';
 import { ProcessConfig } from '@process/utils/initStorage';
 import { changeLanguage } from '@process/services/i18n';
 import type { PetSize } from '@process/pet/petTypes';
-import { createOrUpdateTray, destroyTray, setCloseToTrayEnabled } from '@process/utils/tray';
+import { createOrUpdateTray, destroyTray, refreshTrayMenu, setCloseToTrayEnabled } from '@process/utils/tray';
 import { readCloseToTraySetting, writeCloseToTraySetting } from '@process/utils/closeToTraySetting';
 
 type LanguageChangeListener = () => void;
@@ -46,15 +46,20 @@ export function initSystemSettingsBridge(): void {
   // 语言变更通知，同步主进程 i18n 并通知托盘重建
   // Language change notification, sync main process i18n and notify tray rebuild
   ipcBridge.systemSettings.changeLanguage.provider(async ({ language }) => {
-    // Broadcast to all renderers FIRST (desktop + WebUI) for real-time sync.
-    // This must happen before the potentially slow main-process i18n switch.
+    // 1. Persist to ProcessConfig so main process remembers on restart
+    await ProcessConfig.set('language', language);
+
+    // 2. Broadcast to all renderers FIRST (desktop + WebUI) for real-time sync.
     ipcBridge.systemSettings.languageChanged.emit({ language });
     _languageChangeListener?.();
 
-    // Update main process i18n (non-blocking – don't let a hang here block the provider)
-    changeLanguage(language).catch((error) => {
-      console.error('[SystemSettings] Main process changeLanguage failed:', error);
-    });
+    // 3. Update main process i18n instance and rebuild tray menu
+    try {
+      await changeLanguage(language);
+      await refreshTrayMenu();
+    } catch (error) {
+      console.error('[SystemSettings] Main process changeLanguage or refreshTrayMenu failed:', error);
+    }
   });
 
   // Desktop pet settings

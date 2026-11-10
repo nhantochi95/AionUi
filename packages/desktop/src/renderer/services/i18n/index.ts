@@ -28,6 +28,7 @@ import deDE from './locales/de-DE/index';
 import esES from './locales/es-ES/index';
 import frFR from './locales/fr-FR/index';
 import faIR from './locales/fa-IR/index';
+import viVN from './locales/vi-VN/index';
 export type { I18nKey, I18nModule } from './i18n-keys';
 
 // Re-exports
@@ -50,6 +51,7 @@ const localeData: LocaleData = {
   'es-ES': esES,
   'fr-FR': frFR,
   'fa-IR': faIR,
+  'vi-VN': viVN,
 };
 
 const fallbackLocale = localeData[DEFAULT_LANGUAGE] ?? {};
@@ -79,8 +81,7 @@ function getInjectedLanguageHint(): string | null {
 }
 
 function getElectronSystemLanguageHint(): string | null {
-  if (typeof window === 'undefined' || !window.electronAPI) return null;
-  return navigator.language || null;
+  return null;
 }
 
 function getInitialLanguage(): SupportedLanguage {
@@ -145,7 +146,7 @@ async function initLanguage(): Promise<void> {
   try {
     await configService.whenReady();
     const savedLanguage = configService.get('language');
-    const language = savedLanguage || normalizeLanguageCode(navigator.language || DEFAULT_LANGUAGE);
+    const language = savedLanguage || DEFAULT_LANGUAGE;
     await ensureAndSwitch(i18n, language, loadLocaleModules);
     // Sync to localStorage so next page load can use it as a fast hint
     if (typeof localStorage !== 'undefined') {
@@ -198,11 +199,14 @@ ipcBridge.systemSettings.languageChanged.on(async ({ language }) => {
 export async function changeLanguage(lang: string): Promise<void> {
   await ensureAndSwitch(i18n, lang, loadLocaleModules);
   const normalized = normalizeLanguageCode(lang);
-  await configService.set('language', normalized);
-  // Keep localStorage in sync so WebUI can use it as a fast hint on next load
+  // Keep localStorage in sync so WebUI / pre-auth login can use it as a fast hint on next load
   if (typeof localStorage !== 'undefined') {
     localStorage.setItem('i18nextLng', normalized);
   }
+  // Try saving to backend config, but ignore pre-auth 401 unhandled rejection
+  await configService.set('language', normalized).catch((err) => {
+    console.warn('configService.set(language) failed (likely unauthenticated):', err);
+  });
   // Notify main process to sync i18n (for tray menu, etc.)
   ipcBridge.systemSettings.changeLanguage.invoke({ language: normalized }).catch(() => {});
 }

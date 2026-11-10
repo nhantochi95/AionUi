@@ -672,8 +672,8 @@ html body .aion-telegram-bridge-popover .arco-popover-content {
 }
 
 html body .aion-telegram-bridge-popover .arco-popover-content-inner,
-html body .aion-telegram-bridge-popover .arco-popover-inner,
-html body .aion-telegram-bridge-popover .arco-popover-inner-content {
+html body .aion-telegram-bridge-popover .arco-popover-inner-content,
+html body .aion-telegram-bridge-popover .arco-popover-inner {
   width: 100% !important;
   max-width: none !important;
   box-sizing: border-box !important;

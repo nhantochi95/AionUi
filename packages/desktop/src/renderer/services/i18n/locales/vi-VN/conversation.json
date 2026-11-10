@@ -1,0 +1,786 @@
+{
+  "welcome": {
+    "title": "Hi, what's your plan for today?",
+    "placeholder": "Send a message, upload files, open a folder, create a scheduled task, or type / for commands...",
+    "linkFolder": "Open Folder",
+    "newConversation": "New Chat",
+    "selectModel": "Select Model",
+    "useCliModel": "Select Model",
+    "modelSwitchNotSupported": "Model list will be available after first connection. Send a message to connect and load available models.",
+    "specifyWorkspace": "Chat in Project",
+    "currentWorkspace": "Current Project",
+    "clearWorkspace": "Remove project",
+    "openFolder": "Open Folder",
+    "none": "None",
+    "quickActionsTitle": "What can AionUi do?",
+    "quickActionFeedback": "Report Issue",
+    "quickActionStar": "Like us? Give us a star!",
+    "skillsMarket": "AionUi Skills Market",
+    "skillsMarketDesc": "Search and activate community Skills on demand. Configure once, available for all agents.",
+    "skillsMarketDetails": "View More >>"
+  },
+  "history": {
+    "recents": "Recents",
+    "noHistory": "No chat history",
+    "deleteTitle": "Delete",
+    "deleteConfirm": "Are you sure you want to delete this chat?",
+    "confirmDelete": "Delete",
+    "cancelDelete": "Cancel",
+    "editName": "Edit Name",
+    "saveName": "Save",
+    "cancelEdit": "Cancel",
+    "rename": "Rename",
+    "createCronTask": "Create scheduled task",
+    "renameTitle": "Rename Chat",
+    "renamePlaceholder": "Please enter a new name",
+    "renameSuccess": "Renamed successfully",
+    "renameFailed": "Rename failed",
+    "batchManage": "Batch Manage",
+    "batchModeExit": "Exit Batch Mode",
+    "selectAll": "Select All",
+    "selectedCount": "{{count}} selected",
+    "batchExport": "Batch Export",
+    "batchExportConfirm": "Export {{count}} selected topics?",
+    "batchDelete": "Batch Delete",
+    "batchDeleteConfirm": "Delete {{count}} selected topics?",
+    "batchDeleteConfirm_one": "Delete {{count}} selected topic?",
+    "batchDeleteConfirm_other": "Delete {{count}} selected topics?",
+    "batchDeleteSuccess": "{{count}} topics deleted",
+    "batchDeleteSuccess_one": "{{count}} topic deleted",
+    "batchDeleteSuccess_other": "{{count}} topics deleted",
+    "batchNoSelection": "Please select topics first",
+    "export": "Export",
+    "exportDialogTitle": "Export Topics",
+    "exportDialogSingleDescription": "Export current topic conversation records (JSON + Markdown) and project files into a ZIP package.",
+    "exportDialogBatchDescription": "Export {{count}} selected topics' conversation records (JSON + Markdown) and project files into one ZIP package.",
+    "exportTargetFolder": "Export To Folder",
+    "exportSelectFolder": "Please select an export folder",
+    "exportDialogHint": "Folder selection follows the same interaction as changing the project.",
+    "exporting": "Exporting...",
+    "exportSuccess": "Export succeeded",
+    "exportCanceled": "Export canceled",
+    "exportFailed": "Export failed",
+    "pin": "Pin",
+    "unpin": "Unpin",
+    "markAsUnread": "Mark as unread",
+    "markAsRead": "Mark as read",
+    "pinned": "Pinned",
+    "pinFailed": "Pin operation failed",
+    "pinnedSection": "Pinned",
+    "deleteSuccess": "Deleted successfully",
+    "deleteFailed": "Delete failed",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "recent7Days": "Last 7 Days",
+    "earlier": "Earlier",
+    "projectsSection": "Projects",
+    "conversationsSection": "Conversations",
+    "newConversationInProject": "New chat in this project",
+    "deleting": "Deleting...",
+    "reorderPinned": "Drag to reorder pinned conversation",
+    "forkedFrom": "Forked from “{{name}}”",
+    "forkedConversation": "Forked conversation",
+    "archive": "Archive",
+    "archiveSuccess": "Archived",
+    "archiveFailed": "Archive failed",
+    "batchArchive": "Batch archive",
+    "batchArchiveConfirm": "Archive {{count}} selected topics? You can restore or delete them from Archived in Settings.",
+    "batchArchiveSuccess": "Archived {{count}} topics",
+    "archiveProject": "Archive project",
+    "archiveProjectTitle": "Archive project",
+    "archiveProjectConfirm": "Archive project \"{{name}}\"? Its {{count}} conversation(s) will be archived too. You can restore or delete them from Archived in Settings.",
+    "archiving": "Archiving..."
+  },
+  "historySearch": {
+    "tooltip": "Search messages",
+    "title": "Search conversation content",
+    "shortTitle": "Search",
+    "description": "Search historical messages by keyword, load more on scroll, and jump to the matched message.",
+    "placeholder": "Search message content...",
+    "idle": "Enter keywords to search messages",
+    "empty": "No matching messages found",
+    "loadingMore": "Loading more...",
+    "untitled": "Untitled conversation"
+  },
+  "dropdown": {
+    "cliAgents": "CLI Agents",
+    "presetAssistants": "Preset Assistants"
+  },
+  "noAgentsAvailable": "No agents available",
+  "noModelConfigured": "No model configured. Please configure in settings.",
+  "createFailed": "Failed to create conversation",
+  "createError": {
+    "pathVariants": {
+      "WORKSPACE_PATH_UNAVAILABLE": "The selected workspace path is unavailable. Make sure the workspace path \"{{workspacePath}}\" exists and is accessible."
+    },
+    "codes": {
+      "TEAM_ASSISTANT_ID_REQUIRED": "Please select an assistant before creating the team.",
+      "TEAM_ASSISTANT_NOT_FOUND": "Assistant {{assistantId}} is no longer available. Refresh the assistant list and choose another one.",
+      "TEAM_ASSISTANT_FIELD_UNSUPPORTED": "Use assistant_id instead of {{field}}."
+    }
+  },
+  "agentError": {
+    "fallbackTitle": "Trợ lý không thể phản hồi",
+    "errorCode": "Mã lỗi",
+    "retryable": "Có thể thử lại",
+    "notRetryable": "Cần cấu hình",
+    "resolutionPrefix": "Gợi ý: ",
+    "resolution": {
+      "retry": "Thử lại sau hoặc gửi lại tin nhắn này.",
+      "wait_for_current_response": "Chờ phản hồi hiện tại hoàn tất trước khi gửi tin nhắn khác.",
+      "start_new_session": "Bắt đầu cuộc trò chuyện mới trước khi tiếp tục.",
+      "reconnect_agent": "Khởi động lại hoặc kết nối lại agent đã chọn, sau đó thử lại.",
+      "check_agent_login": "Đăng nhập vào agent đã chọn hoặc làm mới thông tin xác thực.",
+      "check_agent_installation": "Kiểm tra cài đặt agent và cấu hình lệnh cục bộ.",
+      "check_agent_version": "Kiểm tra giao thức agent và tính tương thích phiên bản.",
+      "check_local_command": "Cài đặt lệnh còn thiếu hoặc xác nhận lệnh đã được thêm vào PATH.",
+      "check_provider_credentials": "Kiểm tra khóa API nhà cung cấp mô hình hoặc thông tin tài khoản trong thiết lập.",
+      "check_provider_billing": "Kiểm tra số dư, tín dụng hoặc hạn ngạch nhà cung cấp mô hình.",
+      "check_provider_base_url": "Kiểm tra URL gốc, đường dẫn API, proxy và tính tương thích API của nhà cung cấp.",
+      "change_model": "Chọn mô hình khả dụng cho tài khoản hiện tại và hỗ trợ yêu cầu này.",
+      "reduce_context": "Giảm nội dung tin nhắn, tệp tham chiếu hoặc dung lượng ngữ cảnh, sau đó thử lại.",
+      "send_feedback": "Gửi phản hồi kèm nhật ký để đội ngũ phát triển điều tra."
+    },
+    "ownership": {
+      "aionui": "Ứng dụng",
+      "user_agent": "Agent",
+      "user_llm_provider": "Nhà cung cấp mô hình",
+      "unknown_upstream": "Thượng nguồn"
+    },
+    "codes": {
+      "AIONUI_STREAM_BROKEN": {
+        "title": "Luồng phản hồi bị gián đoạn",
+        "body": "Ứng dụng đã nhận tin nhắn của bạn nhưng luồng phản hồi kết thúc bất ngờ. Vui lòng thử lại; nếu vẫn xảy ra, hãy gửi phản hồi."
+      },
+      "AIONUI_STATE_INCONSISTENT": {
+        "title": "Trạng thái trò chuyện không đồng bộ",
+        "body": "Trạng thái trò chuyện không đồng bộ. Hãy khởi động lại cuộc trò chuyện này hoặc tải lại ứng dụng trước khi thử lại."
+      },
+      "AIONUI_PERMISSION_ERROR": {
+        "title": "Không thể truy cập tài nguyên được yêu cầu",
+        "body": "Kiểm tra quyền hạn cục bộ hoặc hệ thống tệp thất bại. Kiểm tra đường dẫn dự án và quyền ứng dụng, sau đó thử lại."
+      },
+      "AIONUI_INTERNAL_ERROR": {
+        "title": "Yêu cầu thất bại trong ứng dụng",
+        "body": "Yêu cầu thất bại trong khi ứng dụng đang xử lý. Vui lòng thử lại; nếu lặp lại, hãy gửi phản hồi."
+      },
+      "AIONUI_CONVERSATION_BUSY": {
+        "title": "Cuộc trò chuyện đang bận",
+        "body": "Một phản hồi khác vẫn đang chạy. Hãy đợi phản hồi đó kết thúc trước khi gửi tin nhắn mới."
+      },
+      "USER_AGENT_NOT_INSTALLED": {
+        "title": "Agent đã chọn chưa được cài đặt",
+        "body": "Cài đặt CLI hoặc ứng dụng mà agent này yêu cầu, sau đó kết nối lại trong thiết lập."
+      },
+      "USER_AGENT_STARTUP_FAILED": {
+        "title": "Agent đã chọn khởi động thất bại",
+        "body": "Tiến trình agent đã thoát trước khi sẵn sàng. Kiểm tra cài đặt, trạng thái đăng nhập và cấu hình lệnh cục bộ."
+      },
+      "USER_AGENT_OPENCLAW_GATEWAY_UNREACHABLE": {
+        "title": "Không thể kết nối đến OpenClaw Gateway",
+        "body": "OpenClaw Gateway không chạy hoặc không thể tiếp cận tại 127.0.0.1:18789.\n\nKhởi động OpenClaw Gateway và thử lại. Bạn có thể chạy:\nopenclaw gateway status\nopenclaw gateway start"
+      },
+      "USER_AGENT_DISCONNECTED": {
+        "title": "Agent đã chọn bị ngắt kết nối",
+        "body": "Kết nối agent bị đóng trong khi xử lý tin nhắn này. Khởi động lại hoặc kết nối lại agent, sau đó thử lại."
+      },
+      "USER_AGENT_AUTH_REQUIRED": {
+        "title": "Agent đã chọn yêu cầu xác thực",
+        "body": "Đăng nhập vào agent đã chọn hoặc làm mới thông tin xác thực, sau đó gửi lại tin nhắn."
+      },
+      "USER_AGENT_SESSION_NOT_FOUND": {
+        "title": "Phiên agent bị mất",
+        "body": "Agent báo cáo rằng phiên này không được tìm thấy hoặc không còn được nhận diện."
+      },
+      "USER_AGENT_UNSUPPORTED_METHOD": {
+        "title": "Agent đã chọn không hỗ trợ hành động này",
+        "body": "Agent báo cáo rằng phương thức ACP được yêu cầu không được hỗ trợ hoặc không khả dụng."
+      },
+      "USER_AGENT_INVALID_PARAMS": {
+        "title": "Agent đã chọn từ chối yêu cầu",
+        "body": "Agent báo cáo rằng các tham số yêu cầu không hợp lệ."
+      },
+      "USER_AGENT_HANDSHAKE_FAILED": {
+        "title": "Bắt tay agent thất bại",
+        "body": "Agent đã chọn không thể hoàn tất bắt tay khởi động. Khởi động lại hoặc kết nối lại agent, sau đó thử lại."
+      },
+      "USER_AGENT_HANDSHAKE_TIMEOUT": {
+        "title": "Bắt tay agent quá thời gian",
+        "body": "Agent đã chọn không hoàn tất bắt tay khởi động kịp thời. Kiểm tra xem agent còn đang khởi động hay bị chặn, sau đó thử lại."
+      },
+      "USER_AGENT_ACP_INIT_FAILED": {
+        "title": "Khởi tạo giao thức agent thất bại",
+        "body": "Ứng dụng không thể khởi tạo phiên Giao thức Client Agent (ACP) với agent này."
+      },
+      "USER_AGENT_PROTOCOL_PARSE_ERROR": {
+        "title": "Agent báo cáo lỗi phân tích giao thức",
+        "body": "Agent đã chọn báo cáo rằng thông điệp ACP/JSON-RPC không thể phân tích cú pháp."
+      },
+      "USER_AGENT_INVALID_REQUEST": {
+        "title": "Agent báo cáo yêu cầu giao thức không hợp lệ",
+        "body": "Agent đã chọn báo cáo rằng đối tượng yêu cầu ACP/JSON-RPC không hợp lệ."
+      },
+      "USER_AGENT_RESOURCE_NOT_FOUND": {
+        "title": "Agent không tìm thấy tài nguyên cần thiết",
+        "body": "Agent đã chọn báo cáo rằng tài nguyên cần thiết, chẳng hạn như tệp, không được tìm thấy."
+      },
+      "USER_AGENT_PROTOCOL_ERROR": {
+        "title": "Agent trả về lỗi giao thức",
+        "body": "Agent đã chọn trả về mã lỗi ACP không theo chuẩn."
+      },
+      "USER_AGENT_PROTOCOL_MISMATCH": {
+        "title": "Phiên bản giao thức agent không tương thích",
+        "body": "Ứng dụng và agent đã chọn không thể sử dụng phiên bản giao thức ACP tương thích."
+      },
+      "USER_AGENT_NO_PREVIOUS_SESSION": {
+        "title": "Phiên agent trước đó không khả dụng",
+        "body": "Agent không thể tiếp tục phiên trước đó. Bắt đầu cuộc trò chuyện mới để tiếp tục."
+      },
+      "USER_AGENT_COMMAND_NOT_FOUND": {
+        "title": "Không tìm thấy lệnh của agent",
+        "body": "Lệnh agent đã cấu hình không tìm thấy. Hãy cài đặt lệnh hoặc cập nhật đường dẫn lệnh trong thiết lập."
+      },
+      "USER_AGENT_MISSING_ENV": {
+        "title": "Môi trường agent thiếu các biến cần thiết",
+        "body": "Agent cần các biến môi trường chưa được cấu hình. Thêm chúng vào thiết lập hoặc môi trường shell, sau đó kết nối lại."
+      },
+      "USER_LLM_PROVIDER_AUTH_FAILED": {
+        "title": "Xác thực nhà cung cấp mô hình thất bại",
+        "body": "Nhà cung cấp đã chọn từ chối khóa API hoặc thông tin tài khoản. Kiểm tra thiết lập nhà cung cấp và thử lại."
+      },
+      "USER_LLM_PROVIDER_AWS_SSO_EXPIRED": {
+        "title": "Phiên AWS SSO đã hết hạn",
+        "body": "Phiên AWS SSO của bạn đã hết hạn. Chạy 'aws sso login' cho cấu hình tương ứng, sau đó gửi lại tin nhắn."
+      },
+      "USER_LLM_PROVIDER_CONFIG_ERROR": {
+        "title": "Cấu hình nhà cung cấp mô hình không hợp lệ",
+        "body": "Không thể tạo yêu cầu nhà cung cấp từ các thiết lập hiện tại. Kiểm tra thông tin xác thực, vùng, URL gốc và cấu hình cụ thể trước khi thử lại."
+      },
+      "USER_LLM_PROVIDER_MODEL_NOT_FOUND": {
+        "title": "Không tìm thấy mô hình đã chọn",
+        "body": "Nhà cung cấp không nhận diện tên mô hình này. Chọn mô hình khả dụng từ thiết lập và thử lại."
+      },
+      "USER_LLM_PROVIDER_RATE_LIMITED": {
+        "title": "Đã đạt giới hạn tốc độ nhà cung cấp mô hình",
+        "body": "Nhà cung cấp đang tạm thời giới hạn yêu cầu. Hãy đợi một chút, giảm tần suất yêu cầu hoặc đổi mô hình."
+      },
+      "USER_LLM_PROVIDER_TIMEOUT": {
+        "title": "Yêu cầu nhà cung cấp mô hình quá thời gian",
+        "body": "Nhà cung cấp không phản hồi kịp thời. Thử lại sau hoặc chuyển sang nhà cung cấp ổn định hơn."
+      },
+      "USER_LLM_PROVIDER_NETWORK_ERROR": {
+        "title": "Không thể kết nối đến nhà cung cấp mô hình",
+        "body": "Lỗi mạng hoặc DNS ngăn cản truy cập nhà cung cấp. Kiểm tra mạng, proxy và URL gốc."
+      },
+      "USER_LLM_PROVIDER_GATEWAY_ERROR": {
+        "title": "Dịch vụ nhà cung cấp mô hình không khả dụng",
+        "body": "Nhà cung cấp trả về lỗi cổng hoặc dịch vụ. Thử lại sau hoặc sử dụng nhà cung cấp khác."
+      },
+      "USER_LLM_PROVIDER_PERMISSION_DENIED": {
+        "title": "Bị từ chối quyền nhà cung cấp mô hình",
+        "body": "Tài khoản nhà cung cấp không có quyền cho mô hình hoặc thao tác này. Kiểm tra quyền tài khoản hoặc chọn mô hình khác."
+      },
+      "USER_LLM_PROVIDER_BILLING_REQUIRED": {
+        "title": "Cần thanh toán cho nhà cung cấp mô hình",
+        "body": "Nhà cung cấp đã chọn yêu cầu thanh toán đang hoạt động, tín dụng hoặc hạn ngạch trước khi có thể hoàn tất yêu cầu này."
+      },
+      "USER_LLM_PROVIDER_UNSUPPORTED_MODEL": {
+        "title": "Mô hình không hỗ trợ yêu cầu này",
+        "body": "Mô hình đã chọn không khả dụng hoặc không hỗ trợ khả năng được yêu cầu. Chọn mô hình được hỗ trợ và thử lại."
+      },
+      "USER_LLM_PROVIDER_ENDPOINT_NOT_FOUND": {
+        "title": "Không tìm thấy điểm cuối nhà cung cấp mô hình",
+        "body": "Không tìm thấy điểm cuối hoặc đường dẫn API của nhà cung cấp. Kiểm tra URL gốc, tên triển khai và tính tương thích API."
+      },
+      "USER_LLM_PROVIDER_INVALID_REQUEST": {
+        "title": "Nhà cung cấp mô hình từ chối yêu cầu",
+        "body": "Nhà cung cấp báo cáo rằng yêu cầu không hợp lệ. Đơn giản hóa tin nhắn hoặc kiểm tra thiết lập mô hình/nhà cung cấp."
+      },
+      "USER_LLM_PROVIDER_INVALID_TOOL_SCHEMA": {
+        "title": "Lược đồ công cụ bị nhà cung cấp từ chối",
+        "body": "Nhà cung cấp từ chối định nghĩa công cụ trong yêu cầu này. Cập nhật agent hoặc tắt công cụ không tương thích, sau đó thử lại."
+      },
+      "USER_LLM_PROVIDER_CONTEXT_TOO_LARGE": {
+        "title": "Ngữ cảnh quá lớn đối với mô hình",
+        "body": "Yêu cầu vượt quá giới hạn ngữ cảnh của mô hình. Giảm nội dung tin nhắn, tệp tham chiếu hoặc lịch sử trò chuyện, sau đó thử lại."
+      },
+      "USER_LLM_PROVIDER_EMPTY_RESPONSE": {
+        "title": "Nhà cung cấp mô hình trả về phản hồi rỗng",
+        "body": "Nhà cung cấp đã hoàn tất yêu cầu nhưng không có nội dung hữu ích. Thử lại hoặc đổi nhà cung cấp nếu lặp lại."
+      },
+      "WORKSPACE_PATH_RUNTIME_UNAVAILABLE": {
+        "title": "Agent hiện tại không chạy được trong đường dẫn dự án này",
+        "body": "Hãy đảm bảo đường dẫn dự án hiện tại tồn tại.",
+        "bodyWithPath": "Agent hiện tại không chạy được trong đường dẫn dự án \"{{workspacePath}}\". Hãy đảm bảo đường dẫn dự án tồn tại."
+      },
+      "UNKNOWN_UPSTREAM_ERROR": {
+        "title": "Agent hoặc nhà cung cấp thượng nguồn gặp lỗi",
+        "body": "Ứng dụng nhận được lỗi thượng nguồn nhưng không thể phân loại nguồn gốc từ agent, nhà cung cấp, mạng hay môi trường cục bộ."
+      },
+      "MCP_HTTP_RESPONSE_READ_FAILED": {
+        "title": "Đọc phản hồi trợ lý nhóm thất bại",
+        "body": "AionUi không thể đọc phản hồi trợ lý nhóm cục bộ. Thử lại, và nếu vẫn tiếp diễn, hãy khởi động lại ứng dụng."
+      },
+      "MCP_TOOL_REMOTE_ERROR": {
+        "title": "Trợ lý nhóm cục bộ từ chối yêu cầu",
+        "body": "Trợ lý nhóm cục bộ trả về lỗi khi xử lý yêu cầu này. Xem xét chi tiết bên dưới và thử lại sau khi điều chỉnh hành động nhóm."
+      },
+      "MCP_TOOL_RESPONSE_UNEXPECTED": {
+        "title": "Trợ lý nhóm trả về phản hồi bất ngờ",
+        "body": "AionUi nhận được phản hồi bất ngờ từ trợ lý nhóm cục bộ. Thử lại, và báo cáo nếu sự cố vẫn tiếp diễn."
+      },
+      "MCP_TCP_READ_FAILED": {
+        "title": "Đọc từ trợ lý nhóm cục bộ thất bại",
+        "body": "AionUi không thể đọc phản hồi TCP của trợ lý nhóm cục bộ. Thử lại, và khởi động lại ứng dụng nếu lỗi tiếp tục."
+      },
+      "TEAM_SERVICE_UNAVAILABLE": {
+        "title": "Dịch vụ nhóm chưa sẵn sàng",
+        "body": "Phiên làm việc nhóm cục bộ vẫn đang khởi động hoặc bị gián đoạn. Chờ một chút và thử lại."
+      },
+      "TEAM_ASSISTANT_ID_REQUIRED": {
+        "title": "Phải chọn trợ lý đồng đội",
+        "body": "Chọn trợ lý thực từ danh mục trợ lý khả dụng trước khi tạo hoặc sinh đồng đội."
+      },
+      "TEAM_ASSISTANT_NOT_FOUND": {
+        "title": "Trợ lý đã chọn không còn khả dụng",
+        "body": "Làm mới danh mục trợ lý, sau đó chọn trợ lý khác cho đồng đội này."
+      },
+      "TEAM_ASSISTANT_FIELD_UNSUPPORTED": {
+        "title": "Yêu cầu sử dụng trường nhận diện nhóm cũ",
+        "body": "Hành động nhóm này phải sử dụng assistant_id thay vì các trường backend hoặc agent cũ."
+      }
+    }
+  },
+  "workspace": {
+    "title": "Project",
+    "pasteConfirm_title": "Paste files",
+    "pasteConfirm_message": "Are you sure you want to paste '{{name}}' into the selected folder ({{target}})?",
+    "pasteConfirm_paste": "Paste",
+    "pasteConfirm_cancel": "Cancel",
+    "pasteConfirm_noAsk": "Do not ask me again",
+    "pasteConfirm_fileName": "File name",
+    "pasteConfirm_targetFolder": "Target folder",
+    "pasteConfirm_multipleFiles": "{{count}} files",
+    "empty": "It's empty",
+    "emptyDescription": "Files will appear here after uploading files or opening a folder",
+    "searchPlaceholder": "Search files...",
+    "createNewConversation": "Create new chat in current project",
+    "search.empty": "The search result is empty",
+    "addFile": "Add File",
+    "refresh": "Refresh",
+    "temporarySpace": "Temporary Space",
+    "dragOverlayTitle": "Drop to import",
+    "dragOverlayDesc": "Drag files or folders here to copy them into this project.",
+    "dragOverlayHint": "Tip: drop anywhere to import into the selected folder.",
+    "dragNoFiles": "No valid files detected. Please drag from Finder/Explorer.",
+    "dragFailed": "Failed to import dropped files.",
+    "contextMenu": {
+      "open": "Open",
+      "openLocation": "Show in folder",
+      "preview": "Preview",
+      "previewFailed": "Failed to preview",
+      "deleteTitle": "Delete file",
+      "deleteConfirm": "This will delete the file from your system. Continue?",
+      "deleteSuccess": "Deleted successfully",
+      "deleteFailed": "Delete failed",
+      "rename": "Rename",
+      "renameTitle": "Rename",
+      "renamePlaceholder": "Enter new name",
+      "renameSuccess": "Renamed successfully",
+      "renameFailed": "Rename failed",
+      "renameEmpty": "Name cannot be empty",
+      "renameTimeout": "Rename request timed out, please try again",
+      "addToChat": "Add to chat",
+      "addedToChat": "Added to chat",
+      "openFailed": "Failed to open",
+      "revealFailed": "Failed to open containing folder",
+      "download": "Download",
+      "downloadSuccess": "Download successful",
+      "downloadFailed": "Download failed"
+    },
+    "preview": {
+      "errors": {
+        "outsideSandbox": "File is outside the project sandbox, cannot preview.",
+        "notFound": "File does not exist or has been deleted.",
+        "timeout": "Reading file timed out. Please retry."
+      }
+    },
+    "changes": {
+      "tab": "Changes",
+      "filesTab": "Files",
+      "currentBranchLabel": "Current branch",
+      "summary": "{{count}} file(s) changed",
+      "insertions": "+{{count}} insertions",
+      "deletions": "-{{count}} deletions",
+      "empty": "No changes yet",
+      "emptyDescription": "File changes will appear here when AI modifies files",
+      "refresh": "Refresh",
+      "staged": "Staged Changes",
+      "unstaged": "Changes",
+      "changedFiles": "Changed Files",
+      "stage": "Stage",
+      "stageAll": "Stage All Changes",
+      "unstage": "Unstage",
+      "unstageAll": "Unstage All Changes",
+      "discard": "Discard Changes",
+      "reset": "Revert Changes",
+      "noUnstaged": "No unstaged changes",
+      "noStaged": "No staged changes"
+    },
+    "openWorkspace": "Open project folder",
+    "openWith": {
+      "vscode": "VS Code",
+      "terminal": "Terminal",
+      "explorer": "File Explorer",
+      "browser": "Browser"
+    }
+  },
+  "minimap": {
+    "searchAria": "Search conversation",
+    "searchHint": "Click here to search keywords",
+    "empty": "No Q&A turns yet",
+    "noMatch": "No matching content found",
+    "count": "{{count}} turns",
+    "count_one": "{{count}} turn",
+    "count_other": "{{count}} turns"
+  },
+  "chat": {
+    "noModelSelected": "No model selected for current session, cannot send message",
+    "sendMessageTo": "Send message to {{model}}",
+    "processing": "Processing...",
+    "quotaExceededTitle": "Model quota reached",
+    "quotaExceededBody": "The current model quota is exhausted. Switch to {{model}} to continue?",
+    "quotaExceededNoFallback": "Model quota reached. Please switch to another available model.",
+    "quotaSwitched": "Switched to {{model}}.",
+    "apiErrorNoCli": "API error occurred. No CLI agent available for fallback.",
+    "apiErrorSwitchFailed": "Failed to create fallback conversation.",
+    "apiErrorSwitched": "API error, auto-switched to {{cli}} CLI",
+    "confirmationLoadError": "Failed to load confirmation dialog",
+    "tryAnotherAgent": "Try another agent:",
+    "switchAgentFailed": "Failed to switch agent",
+    "speech": {
+      "recordTooltip": "Start voice input",
+      "recordTooltipWithShortcut": "Voice input cmd+M",
+      "pickFileTooltip": "Select an audio file",
+      "stopTooltip": "Stop recording",
+      "processing": "Transcribing audio...",
+      "unsupported": "Voice input is not available in this environment",
+      "startShort": "Mic",
+      "stopShort": "Stop",
+      "transcribingShort": "...",
+      "audioCaptureError": "No microphone was detected",
+      "emptyTranscript": "No speech was detected",
+      "fileTooLarge": "Audio file is too large",
+      "networkError": "Network error while transcribing audio",
+      "notConfigured": "Speech-to-text is not configured yet",
+      "permissionDenied": "Microphone permission was denied",
+      "recordingUnsupported": "Live recording is not supported here. Please upload an audio file instead",
+      "transcriptionFailed": "Audio transcription failed",
+      "genericError": "Voice input failed. Please try again"
+    }
+  },
+  "sideQuestion": {
+    "title": "Side Question",
+    "description": "Ask a quick question about the current conversation",
+    "started": "Starting side question...",
+    "answered": "Side question answered.",
+    "noAnswer": "The side question did not have a clear answer in the current conversation.",
+    "loading": "Thinking...",
+    "parentTaskRunning": "Main task still running in the background.",
+    "dismissHint": "Press Escape, Enter, or Space to dismiss",
+    "unsupported": "Side questions are not available for this conversation.",
+    "alreadyRunning": "A side question is already running.",
+    "attachmentsNotAllowed": "Side questions cannot include files or DOM snippets.",
+    "emptyQuestion": "Please enter a side question after /btw.",
+    "toolsRequired": "/btw can only answer questions based on what's already in this conversation. It doesn't have access to search, browse, or fetch new information.",
+    "error": "Failed to answer the side question."
+  },
+  "commandQueue": {
+    "title": "Draft box",
+    "clear": "Clear draft box",
+    "edit": "Edit",
+    "editing": "Editing",
+    "editPlaceholder": "Update the queued command before it runs.",
+    "cancelEdit": "Cancel",
+    "saveEdit": "Save",
+    "moreActions": "More actions",
+    "reorder": "Drag to reorder queued command",
+    "remove": "Remove",
+    "files": "{{count}} files",
+    "files_one": "{{count}} file",
+    "files_other": "{{count}} files",
+    "pausedAfterFailure": "The next queued command could not start. Edit, reorder, or remove it to continue.",
+    "emptyInput": "Queued commands cannot be empty.",
+    "queueFull": "Queue is full. Remove a command before adding more.",
+    "inputTooLong": "This queued command is too long. Shorten it before sending.",
+    "tooManyFiles": "Too many files are attached to this queued command.",
+    "queueTooLarge": "Queue data is too large to persist safely. Remove some queued commands first.",
+    "sendNow": "Send now",
+    "modeToggle": "Toggle send mode",
+    "help": "Help",
+    "helpIntro": "Messages you send while the AI is replying wait here.",
+    "helpAuto": ": sent automatically one by one after each reply finishes.",
+    "helpManual": ": kept here without sending; send each with Send now.",
+    "clearConfirmTitle": "Clear the send draft box?",
+    "clearConfirmContent": "All pending messages will be removed. This cannot be undone.",
+    "mode": {
+      "auto": "Auto send",
+      "manual": "Manual send"
+    },
+    "addToQueue": "Save to Draft box",
+    "addToQueueShortcut": "⌘ + Enter / Ctrl + Enter",
+    "midturnBlocked": "This agent is still working, so the message can’t be sent directly. Save it to Draft box and send it later.",
+    "enterShortcut": "Enter",
+    "actionMode": "Choose send action",
+    "midturnBlockedSendHint": "This agent is still working, so the message can’t be sent directly. Save it to Draft box and send it later.",
+    "addToQueueBusyHint": "Save to Draft box and send it later."
+  },
+  "contextUsage": {
+    "contextUsed": "context used",
+    "tokensUsed": "{{tokens}} tokens used",
+    "windowUnknown": "Context window size unknown",
+    "sessionCost": "Session cost",
+    "input": "Input",
+    "output": "Output",
+    "thought": "Thinking",
+    "cachedRead": "Cache read",
+    "cachedWrite": "Cache write"
+  },
+  "skill_generator": {
+    "title": "Generate Skill/Rule",
+    "generate": "Generate",
+    "description": "Analyze conversation history to generate:",
+    "type_skill": "Skill (Python)",
+    "type_rule": "Rule (JSON/MD)",
+    "name_label": "Agent Name:",
+    "name_placeholder": "e.g. Excel Translator",
+    "menu_generate": "Generate from History",
+    "menu_load": "Load Rule/Skill",
+    "load_title": "Load Rule/Skill",
+    "load_error": "Failed to load files",
+    "no_files": "No relevant files found in project",
+    "read_error": "Failed to read file",
+    "rule_loaded": "Rule loaded successfully",
+    "no_workspace": "No project configured",
+    "name_required": "Please enter a name for the preset",
+    "no_history": "No conversation history found",
+    "request_sent": "Request sent to agent",
+    "failed": "Failed to generate",
+    "preset_registered": "Agent preset registered successfully!"
+  },
+  "thinking": {
+    "complete": "Thought complete",
+    "label": "Thinking..."
+  },
+  "skills": {
+    "loaded": "Loaded Skills",
+    "slashHint": "Skill"
+  },
+  "mcp": {
+    "loaded": "Loaded MCP",
+    "managementHint": "If an MCP looks abnormal, it is usually caused by the MCP JSON configuration. Go to Tools settings and test it there.",
+    "openSettings": "Open Tools settings",
+    "status": {
+      "loaded": "Loaded",
+      "failed": "Failed",
+      "unsupported": "Unsupported"
+    },
+    "selected": "Selected MCP"
+  },
+  "runtimePreparing": {
+    "sendboxHint": "Preparing the runtime environment. First startup can take a little longer."
+  },
+  "sendbox": {
+    "hint": "Type / for commands, @ to reference files, ↑/↓ for message history",
+    "mediaPathFallback": "This agent has no native support for this file type; it will be sent as a file path.",
+    "hintWithSessions": "Type / for commands, @ for files, @@ for conversations, ↑/↓ for history"
+  },
+  "agentTip": {
+    "codes": {
+      "ACP_EMPTY_TURN": {
+        "body": "This request produced no visible reply."
+      },
+      "ACP_EMPTY_TURN_NEEDS_AUTH": {
+        "body": "This request produced no visible reply. If you're already signed in, this may be a transient backend or connection issue — try again or start a new conversation. If you're not signed in yet, you can sign in — {{hint}}."
+      },
+      "ACP_EMPTY_TURN_TOKEN_LIMIT": {
+        "body": "This request produced no visible reply. The current conversation may be approaching the context length limit — try again, or start a new conversation and retry."
+      },
+      "ACP_EMPTY_TURN_MAX_TOKENS": {
+        "body": "This request hit the model's output token limit before any visible reply was produced."
+      },
+      "ACP_EMPTY_TURN_MAX_TURN_REQUESTS": {
+        "body": "This request hit the model's request limit before any visible reply was produced."
+      },
+      "ACP_EMPTY_TURN_REFUSAL": {
+        "body": "The model refused this request before producing any visible reply."
+      },
+      "ANTIGRAVITY_STEPS_FAILED": {
+        "body": "{{count}} step(s) failed and did NOT take effect. agy ends such turns as successful, so check the result rather than the reply."
+      },
+      "CLI_VERSION_OLDER": {
+        "body": "The installed {{cli}} is older than the version AionUi verified; some features may be missing. Consider upgrading {{cli}}. (installed {{reported}} / verified by AionUi: {{verified}})"
+      },
+      "CLI_VERSION_NEWER": {
+        "body": "The installed {{cli}} is newer than the version AionUi verified. It should still work; report anything that behaves oddly. (installed {{reported}} / verified by AionUi: {{verified}})"
+      },
+      "CODEX_RETRYING": {
+        "body": "{{detail}} (attempt {{attempts}}, {{elapsed}} so far — the agent's provider keeps dropping the connection; AionUi is waiting it out.)"
+      }
+    }
+  },
+  "notFound": "Conversation not found or has been deleted",
+  "explorer": {
+    "addFolder": "Add folder to project",
+    "refreshFiles": "Refresh files",
+    "refreshChanges": "Refresh changes",
+    "collapseAll": "Collapse all",
+    "removeFolder": "Remove from project",
+    "attachDuplicate": "This folder is already in the project",
+    "attachOverlap": "This folder overlaps a folder already in the project",
+    "attachFailed": "Couldn't add the folder",
+    "removeFailed": "Couldn't remove the folder",
+    "contextMenu": {
+      "rename": "Rename",
+      "newFile": "New file",
+      "newDir": "New folder",
+      "addToChat": "Add to chat",
+      "copyRelativePath": "Copy relative path",
+      "copyAbsolutePath": "Copy absolute path"
+    },
+    "namePlaceholder": "Name",
+    "deleteConfirm": "Delete “{{name}}”? This can’t be undone.",
+    "renameFailed": "Couldn't rename",
+    "newFileFailed": "Couldn't create file",
+    "newDirFailed": "Couldn't create folder",
+    "tabs": {
+      "files": "Files",
+      "changes": "Changes"
+    },
+    "addedToChat": "Added {{name}} to chat",
+    "imported": "Imported {{count}} file(s)",
+    "importPartialFailed": "{{copied}} copied, {{failed}} failed (name conflicts or unsupported)",
+    "importFailed": "Failed to import files",
+    "copyNodeFailed": "Failed to copy",
+    "moveNodeFailed": "Failed to move",
+    "search": {
+      "placeholder": "Search files by name",
+      "searching": "Searching…",
+      "empty": "No files match",
+      "limitReached": "Showing first {{count}} — refine to narrow"
+    },
+    "scm": {
+      "notARepository": "Not a version-controlled folder",
+      "noChanges": "No changes",
+      "loading": "Loading changes…",
+      "loadFailed": "Couldn't load changes",
+      "groups": {
+        "staged": "Staged changes",
+        "unstaged": "Changes",
+        "changes": "Changes",
+        "blocked": "Needs resolving"
+      },
+      "sections": {
+        "repositories": "Repositories",
+        "changes": "Changes"
+      },
+      "viewAsTree": "View as tree",
+      "viewAsList": "View as list",
+      "worktree": "Worktree",
+      "expandWorktrees": "Show worktrees",
+      "collapseWorktrees": "Hide worktrees",
+      "state": {
+        "created": "Added",
+        "modified": "Modified",
+        "deleted": "Deleted",
+        "renamed": "Renamed",
+        "conflicted": "Conflict",
+        "unknown": "Unrecognized state"
+      },
+      "badge": {
+        "created": "A",
+        "modified": "M",
+        "deleted": "D",
+        "renamed": "R",
+        "conflicted": "!",
+        "unknown": "?"
+      },
+      "conflictedHint": "Resolve this conflict outside AionUi first",
+      "opaqueHint": "This state comes from a newer backend — shown read-only",
+      "degraded": "Refresh is running in a slower mode because git's index can't be updated",
+      "truncated": "Too many changes to list — showing the first part only",
+      "renamedFrom": "{{from}} → {{to}}",
+      "diff": {
+        "loading": "Loading diff…",
+        "failed": "Couldn't load the diff",
+        "binary": "Binary file — no text diff",
+        "truncated": "Diff truncated (large file)",
+        "empty": "No textual changes",
+        "close": "Close diff"
+      },
+      "actions": {
+        "stage": "Stage changes",
+        "unstage": "Unstage changes",
+        "discard": "Discard changes",
+        "stageAll": "Stage all",
+        "unstageAll": "Unstage all",
+        "blockedHint": "Resolve the conflict outside AionUi before staging or discarding",
+        "confirmDiscardTitle": "Discard changes?",
+        "confirmDiscardTracked": "Edits to {{count}} files will be lost. This can’t be undone.",
+        "confirmDiscardUntracked": "{{count}} new files will be moved to the trash.",
+        "confirmDiscardMixed": "Edits to {{tracked}} file(s) will be lost and can’t be undone; {{untracked}} new file(s) go to the trash.",
+        "discardConfirmButton": "Discard",
+        "okStage": "Staged {{count}} files",
+        "okStage_one": "Staged {{count}} file",
+        "okStage_other": "Staged {{count}} files",
+        "okUnstage": "Unstaged {{count}} files",
+        "okUnstage_one": "Unstaged {{count}} file",
+        "okUnstage_other": "Unstaged {{count}} files",
+        "okDiscard": "Discarded {{count}} files",
+        "okDiscard_one": "Discarded {{count}} file",
+        "okDiscard_other": "Discarded {{count}} files",
+        "partial": "{{succeeded}} of {{total}} done — {{failed}} couldn’t be completed",
+        "partialDetail": "Not completed: {{files}}",
+        "rejectedBlocked": "Nothing was changed — resolve the conflict first",
+        "rejectedUnsupported": "This repository doesn’t support that action",
+        "rejectedFailed": "The action couldn’t be completed",
+        "retry": "Retry",
+        "notSent": "The request didn't reach the backend — nothing was changed. You can try again.",
+        "outcomeUnknown": "The connection reset before a reply arrived — this action may or may not have completed. Refresh and check the file list before retrying.",
+        "allFailed": "None of the {{count}} file(s) could be processed",
+        "allFailed_one": "{{count}} file could not be processed",
+        "allFailed_other": "None of the {{count}} files could be processed"
+      }
+    },
+    "pathCopied": "Path copied",
+    "copyFailed": "Failed to copy path"
+  },
+  "terminal": {
+    "running": "Running",
+    "stopped": "Stopped",
+    "exited": "Exit {{code}}",
+    "stop": "Stop",
+    "truncated": "(earlier output truncated)"
+  },
+  "emptyState": {
+    "greeting": "Hi! Tell me what you need and I'll get started."
+  },
+  "crossSession": {
+    "mentionAgain": "Mention conversation {{name}} in the message box",
+    "mentionAgainHint": "Click to mention this conversation in the message box",
+    "mentionUnavailable": "That conversation can no longer be mentioned.",
+    "mentionFailed": "Could not mention that conversation.",
+    "fromBadge": "From conversation {{name}}",
+    "otherWorkspace": "different workspace",
+    "rateLimitedTitle": "Cross-conversation messages may be looping",
+    "rateLimited": "Automatic messages between \"{{from}}\" and \"{{to}}\" are unusually frequent and may be looping.",
+    "stopBoth": "Stop both conversations",
+    "disableFeature": "Turn off cross-conversation messages"
+  },
+  "planBar": {
+    "title": "Plan",
+    "progress": "{{completed}}/{{total}}",
+    "expand": "Expand plan",
+    "collapse": "Collapse plan"
+  }
+}

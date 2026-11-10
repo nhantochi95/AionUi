@@ -66,7 +66,8 @@ export const resolveLocaleKey = (
   | 'de-DE'
   | 'es-ES'
   | 'fr-FR'
-  | 'fa-IR' => {
+  | 'fa-IR'
+  | 'vi-VN' => {
   const normalized = language.replace(/_/g, '-').toLowerCase();
 
   if (normalized.startsWith('zh-tw')) return 'zh-TW';
@@ -81,5 +82,6 @@ export const resolveLocaleKey = (
   if (normalized.startsWith('es')) return 'es-ES';
   if (normalized.startsWith('fr')) return 'fr-FR';
   if (normalized.startsWith('fa')) return 'fa-IR';
+  if (normalized.startsWith('vi')) return 'vi-VN';
   return 'en-US';
 };
