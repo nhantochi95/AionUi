@@ -21,6 +21,7 @@ import {
 import { Communication, Delete, EditOne, Inbox, Peoples, Plus } from '@icon-park/react';
 import classNames from 'classnames';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import useSWR from 'swr';
 import { ipcBridge } from '@/common';
@@ -33,6 +34,27 @@ import type {
 } from '@/common/types/sharedRoom';
 import SharedRoomFormModal from './SharedRoomFormModal';
 import { useSharedRoomList } from './hooks/useSharedRoomList';
+import { useCompositionInput } from '@renderer/hooks/chat/useCompositionInput';
+import { HybridKanbanBoard } from './components/kanban/HybridKanbanBoard';
+import type { KanbanColumnKey } from './components/kanban/kanbanTypes';
+import { RoundedPillComposer } from './components/RoundedPillComposer';
+import { HoistedPreviewPanel } from './components/HoistedPreviewPanel';
+import { TwoLaneProfiler } from './components/TwoLaneProfiler';
+import ReactMarkdown from 'react-markdown';
+import CodeBlock from '@renderer/components/Markdown/CodeBlock';
+import {
+  MARKDOWN_REMARK_PLUGINS,
+  MarkdownTable,
+  MarkdownTd,
+} from '@renderer/components/Markdown/markdownComponents';
+
+const ROOM_MARKDOWN_COMPONENTS = {
+  table: MarkdownTable as never,
+  td: MarkdownTd as never,
+  code: CodeBlock as never,
+};
+
+export type SharedRoomViewTab = 'chat' | 'kanban' | 'cost';
 
 const TEAM_ACCENT_PALETTE = ['#165DFF', '#00B42A', '#722ED1', '#FF7D00', '#0FC6C2', '#EB0AA4', '#3491FA', '#F53F3F'];
 
@@ -54,7 +76,7 @@ function formatBytes(bytes: number): string {
 function formatShortTime(ts: number): string {
   if (!ts) return '';
   try {
-    return new Date(ts).toLocaleTimeString('vi-VN', {
+    return new Date(ts).toLocaleTimeString(undefined, {
       hour: '2-digit',
       minute: '2-digit',
     });
@@ -72,30 +94,34 @@ const TelegramIcon: React.FC<{ size?: number }> = ({ size = 14 }) => (
   </svg>
 );
 
-const ArtifactCard: React.FC<{ artifact: IStagedRoomArtifact }> = ({ artifact }) => (
-  <div className='inline-flex items-center gap-8px px-10px py-6px rd-8px bg-fill-2 border border-solid border-arco-2 text-12px max-w-full'>
-    <span className='font-500 truncate max-w-200px' title={artifact.file_name}>
-      {artifact.is_image ? '🖼️' : '📄'} {artifact.file_name}
-    </span>
-    <span className='text-11px text-t-tertiary shrink-0'>({formatBytes(artifact.size_bytes)})</span>
-    <button
-      type='button'
-      className='text-11px text-primary-6 bg-transparent border-0 cursor-pointer hover:underline p-0 shrink-0'
-      onClick={() => void ipcBridge.shell.openFile.invoke(artifact.staged_path)}
-    >
-      Mở
-    </button>
-    <button
-      type='button'
-      className='text-11px text-t-secondary bg-transparent border-0 cursor-pointer hover:underline p-0 shrink-0'
-      onClick={() => void ipcBridge.shell.showItemInFolder.invoke(artifact.staged_path)}
-    >
-      Thư mục
-    </button>
-  </div>
-);
+const ArtifactCard: React.FC<{ artifact: IStagedRoomArtifact }> = ({ artifact }) => {
+  const { t } = useTranslation();
+  return (
+    <div className='inline-flex items-center gap-8px px-10px py-6px rd-8px bg-fill-2 border border-solid border-arco-2 text-12px max-w-full'>
+      <span className='font-500 truncate max-w-200px' title={artifact.file_name}>
+        {artifact.is_image ? '🖼️' : '📄'} {artifact.file_name}
+      </span>
+      <span className='text-11px text-t-tertiary shrink-0'>({formatBytes(artifact.size_bytes)})</span>
+      <button
+        type='button'
+        className='text-11px text-primary-6 bg-transparent border-0 cursor-pointer hover:underline p-0 shrink-0'
+        onClick={() => void ipcBridge.shell.openFile.invoke(artifact.staged_path)}
+      >
+        {t('team.sharedRoom.artifactOpen')}
+      </button>
+      <button
+        type='button'
+        className='text-11px text-t-secondary bg-transparent border-0 cursor-pointer hover:underline p-0 shrink-0'
+        onClick={() => void ipcBridge.shell.showItemInFolder.invoke(artifact.staged_path)}
+      >
+        {t('team.sharedRoom.artifactFolder')}
+      </button>
+    </div>
+  );
+};
 
 const SharedRoomPage: React.FC = () => {
+  const { t } = useTranslation();
   const { id: roomId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { mutate: refreshRoomList, removeRoom } = useSharedRoomList();
@@ -129,6 +155,7 @@ const SharedRoomPage: React.FC = () => {
   const messages = messagesData ?? [];
   const tasks = tasksData ?? [];
 
+  const { compositionHandlers: composerComposition, createKeyDownHandler: createComposerKeyDown } = useCompositionInput();
   const [composerText, setComposerText] = useState('');
   const [attachedFiles, setAttachedFiles] = useState<string[]>([]);
   const [replyToMsg, setReplyToMsg] = useState<ISharedRoomMessage | null>(null);
@@ -136,7 +163,8 @@ const SharedRoomPage: React.FC = () => {
   const [allowingHops, setAllowingHops] = useState(false);
 
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
-  const [rightTab, setRightTab] = useState<'tasks' | 'artifacts'>('tasks');
+  const [viewTab, setViewTab] = useState<SharedRoomViewTab>('chat');
+  const [selectedTaskId, setSelectedTaskId] = useState<string | undefined>();
   const [editModalOpen, setEditModalOpen] = useState(false);
 
   // Telegram room binding popover state
@@ -275,9 +303,9 @@ const SharedRoomPage: React.FC = () => {
         setAttachedFiles((prev) => Array.from(new Set([...prev, ...picked])));
       }
     } catch (err) {
-      Message.error(`Không thể chọn file: ${String(err)}`);
+      Message.error(t('team.sharedRoom.filePickFailed', { error: String(err) }));
     }
-  }, []);
+  }, [t]);
 
   const handlePickTaskFiles = useCallback(async () => {
     try {
@@ -288,9 +316,9 @@ const SharedRoomPage: React.FC = () => {
         setTaskFiles((prev) => Array.from(new Set([...prev, ...picked])));
       }
     } catch (err) {
-      Message.error(`Không thể chọn file cho task: ${String(err)}`);
+      Message.error(t('team.sharedRoom.taskFilePickFailed', { error: String(err) }));
     }
-  }, []);
+  }, [t]);
 
   const handleSendMessage = useCallback(async () => {
     if (!roomId || sending) return;
@@ -319,34 +347,34 @@ const SharedRoomPage: React.FC = () => {
         const names = res.routed_targets
           .map((rt) => room?.members.find((m) => m.team_id === rt.team_id)?.team_name ?? rt.team_id)
           .join(', ');
-        Message.success(`Đã đánh thức Leader: ${names}`);
+        Message.success(t('team.sharedRoom.wokeLeaderSuccess', { names }));
       }
     } catch (err) {
-      Message.error(`Gửi tin nhắn thất bại: ${String(err)}`);
+      Message.error(t('team.sharedRoom.sendMessageFailed', { error: String(err) }));
     } finally {
       setSending(false);
     }
-  }, [attachedFiles, composerText, mutateMessages, mutateRoom, replyToMsg, room?.members, roomId, sending]);
+  }, [attachedFiles, composerText, mutateMessages, mutateRoom, replyToMsg, room?.members, roomId, sending, t]);
 
   const handleDeleteCurrentRoom = useCallback(() => {
     if (!room) return;
     Modal.confirm({
-      title: 'Xóa Phòng Họp Liên Team?',
-      content: `Phòng "${room.name}" sẽ bị xóa khỏi danh sách kênh chung (các Team thành viên vẫn được giữ nguyên 100%).`,
-      okText: 'Xóa phòng',
-      cancelText: 'Huỷ',
+      title: t('team.sharedRoom.deleteConfirmTitle'),
+      content: t('team.sharedRoom.deleteConfirmContent', { name: room.name }),
+      okText: t('team.sharedRoom.deleteRoomOk'),
+      cancelText: t('common.cancel'),
       okButtonProps: { status: 'danger', 'data-testid': 'shared-room-confirm-delete-btn' } as Record<string, unknown>,
       onOk: async () => {
         try {
           await removeRoom(room.id);
-          Message.success(`Đã xóa phòng "${room.name}"`);
+          Message.success(t('team.sharedRoom.deleteSuccess', { name: room.name }));
           void navigate('/guid');
         } catch (err) {
-          Message.error(`Không thể xóa phòng: ${String(err)}`);
+          Message.error(t('team.sharedRoom.deleteFailed', { error: String(err) }));
         }
       },
     });
-  }, [navigate, removeRoom, room]);
+  }, [navigate, removeRoom, room, t]);
 
   const handleAllowMoreHops = useCallback(async () => {
     if (!roomId || allowingHops) return;
@@ -354,13 +382,36 @@ const SharedRoomPage: React.FC = () => {
     try {
       const updated = await ipcBridge.sharedRoom.allowMoreHops.invoke({ id: roomId, grant_hops: 5 });
       await mutateRoom(updated, false);
-      Message.success('Đã cấp thêm 5 lượt thảo luận tự động cho các Leader');
+      Message.success(t('team.sharedRoom.grantHopsSuccess'));
     } catch (err) {
-      Message.error(`Không thể mở khoá lượt thảo luận: ${String(err)}`);
+      Message.error(t('team.sharedRoom.grantHopsFailed', { error: String(err) }));
     } finally {
       setAllowingHops(false);
     }
-  }, [allowingHops, mutateRoom, roomId]);
+  }, [allowingHops, mutateRoom, roomId, t]);
+
+  const handleKanbanStatusChange = useCallback(
+    async (taskId: string, targetCol: KanbanColumnKey) => {
+      if (!roomId) return;
+      try {
+        await ipcBridge.sharedRoom.updateTask.invoke({
+          room_id: roomId,
+          task_id: taskId,
+          status: targetCol,
+        });
+        await mutateTasks();
+        if (targetCol === 'done') {
+          Message.success(
+            t('team.sharedRoom.kanban.mergedNotice', 'Branch merged into main & marked as Done')
+          );
+        }
+      } catch (err) {
+        Message.error(String(err));
+      }
+    },
+    [roomId, mutateTasks, t]
+  );
+
 
   const handleToggleRoomDmTarget = useCallback(
     async (checked: boolean) => {
@@ -374,22 +425,22 @@ const SharedRoomPage: React.FC = () => {
         await mutateRoom(updated, false);
         Message.success(
           checked
-            ? 'Đã đặt Phòng Họp này làm kênh nhận tin nhắn trực tiếp trên Telegram DM'
-            : 'Đã gỡ Phòng Họp khỏi kênh mặc định trên Telegram DM'
+            ? t('team.sharedRoom.telegramDmSetSuccess')
+            : t('team.sharedRoom.telegramDmRemovedSuccess')
         );
       } catch (err) {
-        Message.error(`Không thể cập nhật Telegram DM: ${String(err)}`);
+        Message.error(t('team.sharedRoom.telegramDmUpdateFailed', { error: String(err) }));
       } finally {
         setTgSaving(false);
       }
     },
-    [mutateRoom, roomId]
+    [mutateRoom, roomId, t]
   );
 
   const handleSaveRoomTelegramGroup = useCallback(async () => {
     if (!roomId) return;
     if (!tgChatId.trim()) {
-      Message.warning('Vui lòng nhập Group Chat ID (ví dụ: -1001234567890)');
+      Message.warning(t('team.sharedRoom.telegramChatIdRequired'));
       return;
     }
     setTgSaving(true);
@@ -400,13 +451,13 @@ const SharedRoomPage: React.FC = () => {
         group_thread_id: tgThreadId.trim() ? tgThreadId.trim() : null,
       });
       await mutateRoom(updated, false);
-      Message.success('Đã gắn Phòng Họp với Nhóm / Topic Telegram');
+      Message.success(t('team.sharedRoom.telegramBindingSuccess'));
     } catch (err) {
-      Message.error(`Không thể gắn nhóm Telegram: ${String(err)}`);
+      Message.error(t('team.sharedRoom.telegramBindingFailed', { error: String(err) }));
     } finally {
       setTgSaving(false);
     }
-  }, [mutateRoom, roomId, tgChatId, tgThreadId]);
+  }, [mutateRoom, roomId, t, tgChatId, tgThreadId]);
 
   const handleClearRoomTelegramGroup = useCallback(async () => {
     if (!roomId) return;
@@ -416,22 +467,22 @@ const SharedRoomPage: React.FC = () => {
       setTgChatId('');
       setTgThreadId('');
       await mutateRoom(updated, false);
-      Message.success('Đã gỡ gắn Nhóm / Topic Telegram');
+      Message.success(t('team.sharedRoom.telegramUnbindingSuccess'));
     } catch (err) {
-      Message.error(`Không thể gỡ gắn nhóm: ${String(err)}`);
+      Message.error(t('team.sharedRoom.telegramUnbindingFailed', { error: String(err) }));
     } finally {
       setTgSaving(false);
     }
-  }, [mutateRoom, roomId]);
+  }, [mutateRoom, roomId, t]);
 
   const handleCreateTask = useCallback(async () => {
     if (!roomId) return;
     if (!taskToTeamId) {
-      Message.warning('Vui lòng chọn Team nhận task');
+      Message.warning(t('team.sharedRoom.taskToTeamRequired'));
       return;
     }
     if (!taskTitle.trim()) {
-      Message.warning('Vui lòng nhập tiêu đề task liên team');
+      Message.warning(t('team.sharedRoom.taskTitleRequired'));
       return;
     }
     setTaskSaving(true);
@@ -451,13 +502,13 @@ const SharedRoomPage: React.FC = () => {
       setTaskBlockedBy([]);
       setTaskFiles([]);
       await mutateTasks();
-      Message.success('Đã tạo Task Liên Team & đồng bộ cho Leader');
+      Message.success(t('team.sharedRoom.taskCreateSuccess'));
     } catch (err) {
-      Message.error(`Không thể tạo task liên team: ${String(err)}`);
+      Message.error(t('team.sharedRoom.taskCreateFailed', { error: String(err) }));
     } finally {
       setTaskSaving(false);
     }
-  }, [mutateTasks, roomId, taskBlockedBy, taskDescription, taskFiles, taskFromTeamId, taskTitle, taskToTeamId]);
+  }, [mutateTasks, roomId, t, taskBlockedBy, taskDescription, taskFiles, taskFromTeamId, taskTitle, taskToTeamId]);
 
   const handleUpdateTaskStatus = useCallback(
     async (task: ISharedRoomTask, nextStatus: SharedRoomTaskStatus) => {
@@ -471,14 +522,14 @@ const SharedRoomPage: React.FC = () => {
         await mutateTasks();
         Message.success(
           nextStatus === 'completed'
-            ? 'Đã đánh dấu hoàn thành (tự động mở khoá & đánh thức Team phụ thuộc nếu có)'
-            : 'Đã cập nhật trạng thái task'
+            ? t('team.sharedRoom.taskStatusCompletedNotice')
+            : t('team.sharedRoom.taskStatusUpdatedNotice')
         );
       } catch (err) {
-        Message.error(`Không thể cập nhật task: ${String(err)}`);
+        Message.error(t('team.sharedRoom.taskUpdateFailed', { error: String(err) }));
       }
     },
-    [mutateTasks, roomId]
+    [mutateTasks, roomId, t]
   );
 
   if (roomLoading && !room) {
@@ -492,9 +543,9 @@ const SharedRoomPage: React.FC = () => {
   if (!room) {
     return (
       <div className='h-full w-full flex flex-col items-center justify-center gap-12px text-t-secondary'>
-        <Empty description='Không tìm thấy Phòng Họp Liên Team này' />
+        <Empty description={t('team.sharedRoom.roomNotFound')} />
         <Button type='outline' onClick={() => void navigate('/guid')}>
-          Quay về trang chính
+          {t('team.sharedRoom.backToHome')}
         </Button>
       </div>
     );
@@ -506,11 +557,11 @@ const SharedRoomPage: React.FC = () => {
   const tgRoomPopoverContent = (
     <div className='w-full min-w-0 box-border flex flex-col gap-10px text-t-primary'>
       <div className='flex items-center justify-between gap-8px border-b border-arco-2 pb-8px min-w-0'>
-        <span className='text-13px font-600 truncate min-w-0 flex-1'>Đồng bộ Telegram · #{room.name}</span>
+        <span className='text-13px font-600 truncate min-w-0 flex-1'>{t('team.sharedRoom.telegramSyncTitle', { name: room.name })}</span>
         {room.is_active_dm_target && (
           <span className='shrink-0 inline-flex items-center'>
             <Tag size='small' color='arcoblue'>
-              Đang chọn trên DM
+              {t('team.sharedRoom.activeDmTag')}
             </Tag>
           </span>
         )}
@@ -518,9 +569,9 @@ const SharedRoomPage: React.FC = () => {
 
       <div className='flex items-center justify-between gap-12px w-full min-w-0'>
         <div className='flex flex-col gap-2px min-w-0 flex-1'>
-          <span className='text-12px font-500'>Đặt làm kênh chat trên DM 1-1</span>
+          <span className='text-12px font-500'>{t('team.sharedRoom.setDmChannel')}</span>
           <span className='text-11px text-t-tertiary leading-15px break-words'>
-            Nhắn thẳng vào Bot Telegram sẽ gửi vào Phòng Họp Liên Team này (hoặc gõ <code>/room</code>)
+            {t('team.sharedRoom.setDmChannelDesc')}
           </span>
         </div>
         <Switch
@@ -533,22 +584,22 @@ const SharedRoomPage: React.FC = () => {
       </div>
 
       <div className='border-t border-arco-2 pt-8px flex flex-col gap-6px w-full min-w-0'>
-        <span className='text-12px font-500 text-t-secondary'>Gắn với Telegram Group / Topic riêng</span>
-        <Input size='small' placeholder='Group Chat ID (vd: -1001234567890)' value={tgChatId} onChange={setTgChatId} />
+        <span className='text-12px font-500 text-t-secondary'>{t('team.sharedRoom.linkTelegramGroupTitle')}</span>
+        <Input size='small' placeholder={t('team.sharedRoom.groupChatIdPlaceholder')} value={tgChatId} onChange={setTgChatId} />
         <Input
           size='small'
-          placeholder='Topic Thread ID (tuỳ chọn, vd: 99)'
+          placeholder={t('team.sharedRoom.topicThreadIdPlaceholder')}
           value={tgThreadId}
           onChange={setTgThreadId}
         />
         <div className='flex items-center justify-end gap-6px mt-2px'>
           {room.telegram_chat_id && (
             <Button size='mini' status='danger' disabled={tgSaving} onClick={() => void handleClearRoomTelegramGroup()}>
-              Gỡ gắn
+              {t('team.sharedRoom.unlinkGroupBtn')}
             </Button>
           )}
           <Button size='mini' type='primary' loading={tgSaving} onClick={() => void handleSaveRoomTelegramGroup()}>
-            Lưu gắn nhóm
+            {t('team.sharedRoom.saveGroupBtn')}
           </Button>
         </div>
       </div>
@@ -566,14 +617,69 @@ const SharedRoomPage: React.FC = () => {
           <div className='flex flex-col min-w-0'>
             <div className='flex items-center gap-8px min-w-0'>
               <span className='text-15px font-600 truncate'>#{room.name}</span>
-              <Tooltip content='Số lượt các Leader tự trao đổi chéo liên tiếp kể từ tin nhắn gần nhất của anh'>
+              <span
+                data-testid='room-header-worktree-chip'
+                className='font-mono text-11px px-7px py-2px rd-full bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300 border border-solid border-green-200 dark:border-green-800'
+              >
+                🌿 wt/{room.name}
+              </span>
+              <Tooltip content={t('team.sharedRoom.hopsTooltip')}>
                 <Tag size='small' color={isHopLimitReached ? 'orangered' : 'gray'}>
-                  Lượt tự động: {room.hop_count_since_human}/{room.max_hops}
+                  {t('team.sharedRoom.hopsTag', { current: room.hop_count_since_human, max: room.max_hops })}
                 </Tag>
               </Tooltip>
             </div>
             {room.description && <span className='text-11px text-t-tertiary truncate'>{room.description}</span>}
           </div>
+        </div>
+
+        {/* Segmented 3-Tab Room Switcher (F17) */}
+        <div
+          data-testid='room-view-switcher'
+          className='inline-flex bg-fill-2 p-3px rd-8px border border-solid border-arco-2 gap-2px select-none'
+        >
+          <button
+            type='button'
+            data-testid='room-tab-chat'
+            onClick={() => setViewTab('chat')}
+            className={classNames(
+              'px-12px py-5px rd-6px text-12px font-600 transition-all border-0 cursor-pointer flex items-center gap-6px',
+              viewTab === 'chat'
+                ? 'bg-bg-1 text-primary-6 shadow-xs'
+                : 'bg-transparent text-t-secondary hover:text-t-primary'
+            )}
+          >
+            <span>💬</span>
+            <span>{t('team.sharedRoom.tabChat', 'Chat')}</span>
+          </button>
+          <button
+            type='button'
+            data-testid='room-tab-kanban'
+            onClick={() => setViewTab('kanban')}
+            className={classNames(
+              'px-12px py-5px rd-6px text-12px font-600 transition-all border-0 cursor-pointer flex items-center gap-6px',
+              viewTab === 'kanban'
+                ? 'bg-bg-1 text-primary-6 shadow-xs'
+                : 'bg-transparent text-t-secondary hover:text-t-primary'
+            )}
+          >
+            <span>📋</span>
+            <span>{t('team.sharedRoom.tabKanban', 'Kanban ({{count}})', { count: tasks.length })}</span>
+          </button>
+          <button
+            type='button'
+            data-testid='room-tab-cost'
+            onClick={() => setViewTab('cost')}
+            className={classNames(
+              'px-12px py-5px rd-6px text-12px font-600 transition-all border-0 cursor-pointer flex items-center gap-6px',
+              viewTab === 'cost'
+                ? 'bg-bg-1 text-primary-6 shadow-xs'
+                : 'bg-transparent text-t-secondary hover:text-t-primary'
+            )}
+          >
+            <span>💰</span>
+            <span>{t('team.sharedRoom.tabCostProfiler', 'Cost & Profiler')}</span>
+          </button>
         </div>
 
         {/* Participating Leader Pills */}
@@ -585,7 +691,7 @@ const SharedRoomPage: React.FC = () => {
             return (
               <Tooltip
                 key={member.team_id}
-                content={`Click để gọi @${slug} • Shift+Click để mở trang Team "${member.team_name}"`}
+                content={t('team.sharedRoom.memberPillTooltip', { slug, name: member.team_name })}
               >
                 <button
                   type='button'
@@ -602,13 +708,13 @@ const SharedRoomPage: React.FC = () => {
                   <span className='font-500 max-w-120px truncate'>{member.team_name}</span>
                   <span className='text-11px text-t-tertiary'>· {member.leader_name} 👑</span>
                   {member.is_host && (
-                    <span title='Team Chủ trì (Chair)' className='text-11px'>
+                    <span title={t('team.sharedRoom.hostChairTitle')} className='text-11px'>
                       🪑
                     </span>
                   )}
                   {isWorkingHandoff && (
                     <span
-                      title='Đang xử lý yêu cầu từ phòng họp'
+                      title={t('team.sharedRoom.workingHandoffTitle')}
                       className='w-6px h-6px rd-full bg-primary-6 animate-pulse'
                     />
                   )}
@@ -644,7 +750,7 @@ const SharedRoomPage: React.FC = () => {
             </button>
           </Popover>
 
-          <Tooltip content='Cấu hình thành viên & quy tắc phòng họp'>
+          <Tooltip content={t('team.sharedRoom.configModalTooltip')}>
             <Button
               size='small'
               type='secondary'
@@ -654,7 +760,7 @@ const SharedRoomPage: React.FC = () => {
             />
           </Tooltip>
 
-          <Tooltip content='Xóa phòng họp liên team'>
+          <Tooltip content={t('team.sharedRoom.deleteRoomTooltip')}>
             <Button
               size='small'
               type='secondary'
@@ -673,7 +779,7 @@ const SharedRoomPage: React.FC = () => {
             >
               <span className='inline-flex items-center gap-6px'>
                 <Inbox theme='outline' size='14' fill='currentColor' />
-                <span>Task & File</span>
+                <span>{t('team.sharedRoom.taskAndFileBtn')}</span>
               </span>
             </Button>
           </Badge>
@@ -684,23 +790,22 @@ const SharedRoomPage: React.FC = () => {
       {isHopLimitReached && (
         <div className='shrink-0 bg-warning-1 border-b border-warning-3 px-16px py-8px flex items-center justify-between gap-12px'>
           <span className='text-12px text-t-primary'>
-            ⏸ <b>Bảo vệ chống lặp vô hạn:</b> Các Leader đã tự trao đổi liên tiếp đạt ngưỡng <b>{room.max_hops} lượt</b>
-            . Anh có thể gửi chỉ đạo mới hoặc bấm nút bên phải để cấp thêm 5 lượt thảo luận.
+            ⏸ {t('team.sharedRoom.antiLoopBannerText', { max: room.max_hops })}
           </span>
           <Button size='mini' type='primary' loading={allowingHops} onClick={() => void handleAllowMoreHops()}>
-            ✅ Cho phép thảo luận tiếp (+5 lượt)
+            ✅ {t('team.sharedRoom.allowMoreHopsBtn')}
           </Button>
         </div>
       )}
 
-      {/* Body: Main Multi-Leader Timeline + Right Collaboration Panel */}
+      {/* Body: Main Multi-Leader Stage + Right Preview Panel */}
       <div className='flex-1 min-h-0 flex overflow-hidden'>
-        {/* Left: Chat Timeline + Composer */}
-        <div className='flex-1 min-w-0 flex flex-col h-full'>
+        {viewTab === 'chat' && (
+          <div className='flex-1 min-w-0 flex flex-col h-full'>
           <div className='flex-1 min-h-0 overflow-y-auto px-20px py-16px flex flex-col gap-14px'>
             {room.rules && (
               <div className='rd-8px bg-fill-1 border border-dashed border-arco-2 px-12px py-8px text-12px text-t-secondary'>
-                <b>📌 Quy tắc phối hợp của phòng:</b> {room.rules}
+                <b>📌 {t('team.sharedRoom.roomRulesLabel')}</b> {room.rules}
               </div>
             )}
 
@@ -712,11 +817,10 @@ const SharedRoomPage: React.FC = () => {
               <div className='my-auto py-32px flex flex-col items-center justify-center gap-10px text-center text-t-tertiary'>
                 <Peoples theme='outline' size='32' fill='currentColor' />
                 <div className='text-14px font-500 text-t-secondary'>
-                  Phòng Họp Liên Team đã sẵn sàng ({room.members.length} Leader 👑)
+                  {t('team.sharedRoom.emptyRoomReady', { count: room.members.length })}
                 </div>
                 <div className='max-w-460px text-12px leading-18px'>
-                  Gắn <code>@TênTeam</code> hoặc <code>@all</code> để chỉ định Leader cụ thể, hoặc nhắn tự nhiên để hệ
-                  thống tự định tuyến tới đúng Leader chuyên trách / Chủ trì.
+                  {t('team.sharedRoom.emptyRoomHint')}
                 </div>
               </div>
             ) : (
@@ -742,7 +846,7 @@ const SharedRoomPage: React.FC = () => {
                   return (
                     <div key={msg.id} className='flex flex-col items-end gap-4px'>
                       <div className='flex items-center gap-6px text-11px text-t-tertiary'>
-                        <span>{msg.sender_label || 'Anh'}</span>
+                        <span>{msg.sender_label || t('team.sharedRoom.userSenderLabel')}</span>
                         <span>• {formatShortTime(msg.created_at)}</span>
                       </div>
                       <div
@@ -751,7 +855,7 @@ const SharedRoomPage: React.FC = () => {
                       >
                         {replied && (
                           <div className='rd-6px bg-black/15 px-8px py-4px text-11px opacity-90 truncate'>
-                            ↩ Trả lời <b>{replied.sender_label}</b>: {replied.content.slice(0, 90)}
+                            ↩ {t('team.sharedRoom.replyPreviewPrefix', { sender: replied.sender_label })} {replied.content.slice(0, 90)}
                           </div>
                         )}
                         <div className='text-13px leading-20px whitespace-pre-wrap break-words'>{msg.content}</div>
@@ -765,7 +869,7 @@ const SharedRoomPage: React.FC = () => {
                       )}
                       {targetNames.length > 0 && (
                         <span className='text-11px text-t-tertiary'>
-                          ⚡ Đã định tuyến tới Leader: <b>{targetNames.join(', ')}</b>
+                          ⚡ {t('team.sharedRoom.routedToLeaderPrefix', { names: targetNames.join(', ') })}
                         </span>
                       )}
                     </div>
@@ -799,7 +903,7 @@ const SharedRoomPage: React.FC = () => {
                             textareaRef.current?.focus();
                           }}
                         >
-                          ↩ Trả lời Leader này
+                          ↩ {t('team.sharedRoom.replyToLeaderBtn')}
                         </button>
                         {msg.sender_team_id && (
                           <button
@@ -807,7 +911,7 @@ const SharedRoomPage: React.FC = () => {
                             className='opacity-0 group-hover:opacity-100 transition-opacity text-11px text-t-tertiary bg-transparent border-0 cursor-pointer hover:underline p-0'
                             onClick={() => void navigate(`/team/${msg.sender_team_id}`)}
                           >
-                            Mở Team ↗
+                            {t('team.sharedRoom.openTeamLink')}
                           </button>
                         )}
                       </div>
@@ -818,11 +922,16 @@ const SharedRoomPage: React.FC = () => {
                       >
                         {replied && (
                           <div className='rd-6px bg-fill-3 px-8px py-4px text-11px text-t-secondary truncate'>
-                            ↩ Phản hồi <b>{replied.sender_label}</b>: {replied.content.slice(0, 90)}
+                            ↩ {t('team.sharedRoom.responseToLeaderPrefix', { sender: replied.sender_label })} {replied.content.slice(0, 90)}
                           </div>
                         )}
-                        <div className='text-13px leading-20px text-t-primary whitespace-pre-wrap break-words'>
-                          {msg.content}
+                        <div className='text-13px leading-20px text-t-primary break-words [&_p]:my-4px [&_p:first-child]:mt-0 [&_p:last-child]:mb-0 [&_ul]:my-4px [&_ol]:my-4px [&_pre]:my-6px'>
+                          <ReactMarkdown
+                            remarkPlugins={MARKDOWN_REMARK_PLUGINS}
+                            components={ROOM_MARKDOWN_COMPONENTS}
+                          >
+                            {msg.content}
+                          </ReactMarkdown>
                         </div>
                       </div>
 
@@ -836,7 +945,7 @@ const SharedRoomPage: React.FC = () => {
 
                       {targetNames.length > 0 && (
                         <span className='text-11px text-t-tertiary'>
-                          ↪ Chuyển tiếp tới Leader: <b>{targetNames.join(', ')}</b>
+                          ↪ {t('team.sharedRoom.forwardToLeaderPrefix', { names: targetNames.join(', ') })}
                         </span>
                       )}
                     </div>
@@ -847,248 +956,123 @@ const SharedRoomPage: React.FC = () => {
             <div ref={timelineEndRef} />
           </div>
 
-          {/* Composer */}
-          <div className='shrink-0 border-t border-arco-2 px-16px py-10px bg-bg-1 flex flex-col gap-8px'>
-            {replyToMsg && (
-              <div className='flex items-center justify-between gap-8px rd-6px bg-fill-2 px-10px py-5px text-12px'>
-                <span className='truncate text-t-secondary'>
-                  ↩ Đang trả lời trực tiếp <b>[{replyToMsg.sender_label}]</b>: {replyToMsg.content.slice(0, 80)}
+            {/* Rounded Pill Composer (F20) */}
+            <RoundedPillComposer
+              roomId={room.id}
+              roomName={room.name}
+              members={room.members}
+              activeWorktree={`wt/${room.name}`}
+              isAgentRunning={room.members.some((m) => Boolean(m.pending_handoff_msg_id))}
+              sending={sending}
+              replyToMsg={replyToMsg}
+              onClearReply={() => setReplyToMsg(null)}
+              onSendMessage={async ({ content, files, wokenTargets, liveSteering }) => {
+                if (!roomId || sending) return;
+                setSending(true);
+                try {
+                  const res = await ipcBridge.sharedRoom.sendMessage.invoke({
+                    id: roomId,
+                    content,
+                    files,
+                    reply_to_id: replyToMsg?.id ?? null,
+                    wake_targets: wokenTargets,
+                    live_steering: liveSteering,
+                  });
+                  setReplyToMsg(null);
+                  await Promise.all([
+                    mutateMessages((prev) => {
+                      const list = prev ?? [];
+                      return list.some((m) => m.id === res.message.id) ? list : [...list, res.message];
+                    }, true),
+                    mutateRoom(),
+                  ]);
+                  if (res.routed_targets.length > 0) {
+                    const names = res.routed_targets
+                      .map((rt) => room?.members.find((m) => m.team_id === rt.team_id)?.team_name ?? rt.team_id)
+                      .join(', ');
+                    Message.success(t('team.sharedRoom.wokeLeaderSuccess', { names }));
+                  }
+                } catch (err) {
+                  Message.error(t('team.sharedRoom.sendMessageFailed', { error: String(err) }));
+                } finally {
+                  setSending(false);
+                }
+              }}
+              onSelectFiles={async () => {
+                try {
+                  const picked = await ipcBridge.dialog.showOpen.invoke({
+                    properties: ['openFile', 'multiSelections'],
+                  });
+                  return picked ?? [];
+                } catch (err) {
+                  Message.error(t('team.sharedRoom.filePickFailed', { error: String(err) }));
+                  return [];
+                }
+              }}
+            />
+          </div>
+        )}
+
+        {viewTab === 'kanban' && (
+          <div className='flex-1 min-w-0 flex flex-col h-full overflow-hidden p-16px'>
+            <div className='flex items-center justify-between pb-12px'>
+              <div className='flex items-center gap-8px'>
+                <span className='font-bold text-14px text-t-primary'>
+                  {t('team.sharedRoom.kanban.title', 'Cross-Team Task Kanban')}
                 </span>
-                <button
-                  type='button'
-                  className='text-12px text-t-tertiary hover:text-t-primary bg-transparent border-0 cursor-pointer'
-                  onClick={() => setReplyToMsg(null)}
-                >
-                  ✕
-                </button>
+                <Tag size='small' color='arcoblue'>
+                  {tasks.length} {t('team.sharedRoom.kanban.tasksCount', 'tasks')}
+                </Tag>
               </div>
-            )}
-
-            {attachedFiles.length > 0 && (
-              <div className='flex flex-wrap items-center gap-6px'>
-                {attachedFiles.map((filePath) => {
-                  const base = filePath.split(/[\\/]/).pop() ?? filePath;
-                  return (
-                    <Tag
-                      key={filePath}
-                      closable
-                      onClose={() => setAttachedFiles((prev) => prev.filter((p) => p !== filePath))}
-                    >
-                      📎 {base}
-                    </Tag>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Quick @mention chips */}
-            <div className='flex items-center gap-6px flex-wrap'>
-              <span className='text-11px text-t-tertiary'>Gọi nhanh:</span>
-              <button
-                type='button'
-                className='px-7px py-2px rd-999px text-11px bg-fill-2 hover:bg-fill-3 text-t-secondary border border-solid border-arco-2 cursor-pointer'
-                onClick={() => insertMention('all')}
-              >
-                @all
-              </button>
-              {room.members.map((m) => {
-                const slug = mentionSlug(m.team_name);
-                return (
-                  <button
-                    key={m.team_id}
-                    type='button'
-                    className='px-7px py-2px rd-999px text-11px bg-fill-2 hover:bg-fill-3 text-t-secondary border border-solid border-arco-2 cursor-pointer'
-                    onClick={() => insertMention(slug)}
-                  >
-                    @{slug}
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className='flex items-end gap-8px'>
-              <Tooltip content='Đính kèm file vào kho Shared Artifacts & hộp thư chung của các Team'>
-                <Button type='secondary' onClick={() => void handlePickFiles()} className='!h-36px !px-10px shrink-0'>
-                  📎
-                </Button>
-              </Tooltip>
-
-              <textarea
-                ref={textareaRef}
-                data-testid='shared-room-composer-input'
-                rows={2}
-                placeholder='Nhập chỉ đạo cho các Leader... (@tên-team để gọi đích danh, Enter để gửi, Shift+Enter xuống dòng)'
-                value={composerText}
-                onChange={(e) => setComposerText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.nativeEvent.isComposing || e.keyCode === 229) {
-                    return;
-                  }
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    void handleSendMessage();
-                  }
-                }}
-                className='flex-1 min-w-0 rd-8px border border-solid border-arco-2 bg-fill-1 px-12px py-8px text-13px text-t-primary resize-none focus:outline-none focus:border-primary-6'
-              />
-
               <Button
+                size='small'
                 type='primary'
-                data-testid='shared-room-send-btn'
-                loading={sending}
-                disabled={!composerText.trim() && attachedFiles.length === 0}
-                onClick={() => void handleSendMessage()}
-                className='!h-36px !px-16px shrink-0'
+                data-testid='kanban-create-task-btn'
+                icon={<Plus theme='outline' size='14' fill='currentColor' />}
+                onClick={() => {
+                  setTaskToTeamId(room.members[0]?.team_id ?? '');
+                  setTaskModalOpen(true);
+                }}
               >
-                Gửi
+                {t('team.sharedRoom.createTaskBtn', 'New Task')}
               </Button>
             </div>
+            <div className='flex-1 min-h-0'>
+              <HybridKanbanBoard
+                tasks={tasks}
+                onTaskStatusChange={handleKanbanStatusChange}
+                onSelectTask={(id) => {
+                  setSelectedTaskId(id);
+                  setRightPanelOpen(true);
+                }}
+                selectedTaskId={selectedTaskId}
+              />
+            </div>
           </div>
-        </div>
-
-        {/* Right Panel: Cross-Team Task Board & Shared Artifacts */}
-        {rightPanelOpen && (
-          <aside className='w-350px shrink-0 border-s border-arco-2 bg-bg-1 flex flex-col h-full'>
-            <div className='shrink-0 border-b border-arco-2 px-12px py-8px flex items-center justify-between gap-6px'>
-              <div className='flex items-center gap-4px'>
-                <button
-                  type='button'
-                  className={classNames(
-                    'px-10px py-4px rd-6px text-12px font-500 border-0 cursor-pointer transition-colors',
-                    rightTab === 'tasks' ? 'bg-primary-6 text-white' : 'bg-fill-2 text-t-secondary hover:bg-fill-3'
-                  )}
-                  onClick={() => setRightTab('tasks')}
-                >
-                  Task Liên Team ({tasks.length})
-                </button>
-                <button
-                  type='button'
-                  className={classNames(
-                    'px-10px py-4px rd-6px text-12px font-500 border-0 cursor-pointer transition-colors',
-                    rightTab === 'artifacts' ? 'bg-primary-6 text-white' : 'bg-fill-2 text-t-secondary hover:bg-fill-3'
-                  )}
-                  onClick={() => setRightTab('artifacts')}
-                >
-                  Kho File ({allArtifacts.length})
-                </button>
-              </div>
-
-              {rightTab === 'tasks' ? (
-                <Button
-                  size='mini'
-                  type='outline'
-                  data-testid='shared-room-new-task-btn'
-                  icon={<Plus theme='outline' size='12' fill='currentColor' />}
-                  onClick={() => {
-                    setTaskToTeamId(room.members[0]?.team_id ?? '');
-                    setTaskModalOpen(true);
-                  }}
-                >
-                  Giao task
-                </Button>
-              ) : (
-                <Button
-                  size='mini'
-                  type='text'
-                  onClick={() => void ipcBridge.shell.openFile.invoke(room.artifacts_dir)}
-                >
-                  Mở thư mục
-                </Button>
-              )}
-            </div>
-
-            <div className='flex-1 min-h-0 overflow-y-auto p-12px flex flex-col gap-10px'>
-              {rightTab === 'tasks' ? (
-                tasks.length === 0 ? (
-                  <div className='py-32px text-center text-12px text-t-tertiary leading-18px'>
-                    Chưa có Task Liên Team nào. Anh hoặc các Leader có thể tạo task bàn giao kèm điều kiện phụ thuộc (
-                    <code>blocked_by</code>).
-                  </div>
-                ) : (
-                  tasks.map((task) => {
-                    const unfinishedBlockers = (task.blocked_by ?? []).filter((depId) => {
-                      const dep = taskById.get(depId);
-                      return dep && dep.status !== 'completed';
-                    });
-                    const isBlocked = unfinishedBlockers.length > 0 && task.status !== 'completed';
-
-                    return (
-                      <div
-                        key={task.id}
-                        className='rd-8px border border-solid border-arco-2 bg-fill-1 p-10px flex flex-col gap-6px'
-                      >
-                        <div className='flex items-start justify-between gap-6px'>
-                          <span className='text-13px font-600 leading-18px'>{task.title}</span>
-                          <Select
-                            size='mini'
-                            value={task.status}
-                            style={{ width: 112 }}
-                            onChange={(val) => void handleUpdateTaskStatus(task, val as SharedRoomTaskStatus)}
-                          >
-                            <Select.Option value='pending'>⏳ Chờ xử lý</Select.Option>
-                            <Select.Option value='in_progress'>🔄 Đang làm</Select.Option>
-                            <Select.Option value='completed'>✅ Hoàn thành</Select.Option>
-                            <Select.Option value='cancelled'>🚫 Đã huỷ</Select.Option>
-                          </Select>
-                        </div>
-
-                        <div className='text-11px text-t-secondary flex items-center gap-4px flex-wrap'>
-                          <span>{task.from_team_name ? `Từ ${task.from_team_name}` : 'Từ Anh'}</span>
-                          <span>→</span>
-                          <Tag size='small' color='arcoblue'>
-                            @{task.to_team_name}
-                          </Tag>
-                        </div>
-
-                        {isBlocked && (
-                          <div className='rd-6px bg-warning-1 px-8px py-4px text-11px text-warning-7'>
-                            🔒 Đang chờ {unfinishedBlockers.length} task tiền đề hoàn thành (sẽ tự động đánh thức{' '}
-                            <b>{task.to_team_name}</b> ngay khi mở khoá)
-                          </div>
-                        )}
-
-                        {task.description && (
-                          <div className='text-12px text-t-secondary whitespace-pre-wrap'>{task.description}</div>
-                        )}
-
-                        {task.result_summary && (
-                          <div className='rd-6px bg-success-1 px-8px py-5px text-11px text-t-primary'>
-                            <b>Kết quả bàn giao:</b> {task.result_summary}
-                          </div>
-                        )}
-
-                        {task.artifacts?.length > 0 && (
-                          <div className='flex flex-col gap-4px pt-2px'>
-                            {task.artifacts.map((art) => (
-                              <ArtifactCard key={art.staged_path} artifact={art} />
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
-                )
-              ) : allArtifacts.length === 0 ? (
-                <div className='py-32px text-center text-12px text-t-tertiary leading-18px'>
-                  Chưa có file chung nào. Mọi file đính kèm trong phòng họp sẽ tự động lưu tại{' '}
-                  <code>Shared Artifacts</code> và đồng bộ sang <code>.shared-inbox/</code> của từng Team.
-                </div>
-              ) : (
-                allArtifacts.map(({ artifact, sourceLabel, createdAt }) => (
-                  <div
-                    key={artifact.staged_path}
-                    className='rd-8px border border-solid border-arco-2 bg-fill-1 p-10px flex flex-col gap-6px'
-                  >
-                    <ArtifactCard artifact={artifact} />
-                    <span className='text-11px text-t-tertiary'>
-                      Chia sẻ bởi <b>{sourceLabel}</b> • {formatShortTime(createdAt)}
-                    </span>
-                  </div>
-                ))
-              )}
-            </div>
-          </aside>
         )}
+
+        {viewTab === 'cost' && (
+          <div className='flex-1 min-w-0 flex flex-col h-full overflow-y-auto p-16px max-w-960px mx-auto w-full'>
+            <TwoLaneProfiler
+              modelTimeSec={26.0}
+              toolTimeSec={22.2}
+              totalTimeSec={48.2}
+              showWalletCards={true}
+            />
+          </div>
+        )}
+
+        {/* Hoisted 380px Preview & Profiler Panel (F21) */}
+        <HoistedPreviewPanel
+          open={rightPanelOpen}
+          onClose={() => setRightPanelOpen(false)}
+          selectedTaskId={selectedTaskId}
+          task={tasks.find((t) => t.id === selectedTaskId)}
+          worktreeLeaseId={`wt-${room.id}`}
+          roomName={room.name}
+          goalAncestry={['Release v2.4', room.name, tasks.find((t) => t.id === selectedTaskId)?.title ?? 'Main Stream']}
+          onMergeSuccess={mutateTasks}
+        />
       </div>
 
       {/* Edit Shared Room Modal */}
@@ -1105,14 +1089,14 @@ const SharedRoomPage: React.FC = () => {
 
       {/* Create Cross-Team Task Modal */}
       <Modal
-        title='Giao Task Liên Team (Cross-Team Handoff)'
+        title={t('team.sharedRoom.createTaskModalTitle')}
         visible={taskModalOpen}
         onCancel={() => setTaskModalOpen(false)}
         style={{ width: 520, maxWidth: 'calc(100vw - 32px)' }}
         footer={
           <div className='flex justify-end gap-8px'>
             <Button onClick={() => setTaskModalOpen(false)} disabled={taskSaving}>
-              Huỷ
+              {t('common.cancel')}
             </Button>
             <Button
               type='primary'
@@ -1121,7 +1105,7 @@ const SharedRoomPage: React.FC = () => {
               disabled={!taskToTeamId || !taskTitle.trim()}
               onClick={() => void handleCreateTask()}
             >
-              Tạo & Giao cho Leader
+              {t('team.sharedRoom.createAndAssignTaskBtn')}
             </Button>
           </div>
         }
@@ -1129,10 +1113,10 @@ const SharedRoomPage: React.FC = () => {
         <div className='flex flex-col gap-12px text-t-primary'>
           <div className='grid grid-cols-2 gap-10px'>
             <div className='flex flex-col gap-4px'>
-              <span className='text-12px font-500 text-t-secondary'>Team yêu cầu (Tuỳ chọn)</span>
+              <span className='text-12px font-500 text-t-secondary'>{t('team.sharedRoom.requestingTeamLabel')}</span>
               <Select
                 allowClear
-                placeholder='Anh (Trực tiếp)'
+                placeholder={t('team.sharedRoom.directUserOption')}
                 value={taskFromTeamId || undefined}
                 onChange={(val) => setTaskFromTeamId((val as string) ?? '')}
               >
@@ -1146,11 +1130,11 @@ const SharedRoomPage: React.FC = () => {
 
             <div className='flex flex-col gap-4px'>
               <span className='text-12px font-500 text-t-secondary'>
-                Giao cho Team <span className='text-danger-6'>*</span>
+                {t('team.sharedRoom.assignToTeamLabel')} <span className='text-danger-6'>*</span>
               </span>
               <Select
                 data-testid='shared-room-task-to-select'
-                placeholder='Chọn Team nhận'
+                placeholder={t('team.sharedRoom.selectRecipientTeamPlaceholder')}
                 value={taskToTeamId || undefined}
                 onChange={(val) => setTaskToTeamId(val as string)}
               >
@@ -1165,22 +1149,22 @@ const SharedRoomPage: React.FC = () => {
 
           <div className='flex flex-col gap-4px'>
             <span className='text-12px font-500 text-t-secondary'>
-              Tiêu đề công việc <span className='text-danger-6'>*</span>
+              {t('team.sharedRoom.taskTitleFieldLabel')} <span className='text-danger-6'>*</span>
             </span>
             <Input
               data-testid='shared-room-task-title-input'
-              placeholder='Ví dụ: Implement UI từ OpenAPI spec đã chốt'
+              placeholder={t('team.sharedRoom.taskTitleFieldPlaceholder')}
               value={taskTitle}
               onChange={setTaskTitle}
             />
           </div>
 
           <div className='flex flex-col gap-4px'>
-            <span className='text-12px font-500 text-t-secondary'>Mô tả chi tiết / Tiêu chí bàn giao</span>
+            <span className='text-12px font-500 text-t-secondary'>{t('team.sharedRoom.taskDescFieldLabel')}</span>
             <Input.TextArea
               data-testid='shared-room-task-desc-input'
               rows={3}
-              placeholder='Mô tả đầu vào, yêu cầu đầu ra...'
+              placeholder={t('team.sharedRoom.taskDescFieldPlaceholder')}
               value={taskDescription}
               onChange={setTaskDescription}
             />
@@ -1189,12 +1173,12 @@ const SharedRoomPage: React.FC = () => {
           {tasks.filter((t) => t.status !== 'completed' && t.status !== 'cancelled').length > 0 && (
             <div className='flex flex-col gap-4px'>
               <span className='text-12px font-500 text-t-secondary'>
-                Chờ Task tiền đề hoàn thành (<code>blocked_by</code>)
+                {t('team.sharedRoom.taskBlockedByLabel')}
               </span>
               <Select
                 data-testid='shared-room-task-blocked-by-select'
                 mode='multiple'
-                placeholder='Không chặn (đánh thức Leader ngay lập tức)'
+                placeholder={t('team.sharedRoom.taskBlockedByPlaceholder')}
                 value={taskBlockedBy}
                 onChange={(vals) => setTaskBlockedBy(vals as string[])}
               >
@@ -1211,9 +1195,9 @@ const SharedRoomPage: React.FC = () => {
 
           <div className='flex flex-col gap-6px'>
             <div className='flex items-center justify-between'>
-              <span className='text-12px font-500 text-t-secondary'>Đính kèm file bàn giao</span>
+              <span className='text-12px font-500 text-t-secondary'>{t('team.sharedRoom.taskAttachFilesLabel')}</span>
               <Button size='mini' type='outline' onClick={() => void handlePickTaskFiles()}>
-                📎 Chọn file
+                {t('team.sharedRoom.taskSelectFilesBtn')}
               </Button>
             </div>
             {taskFiles.length > 0 && (

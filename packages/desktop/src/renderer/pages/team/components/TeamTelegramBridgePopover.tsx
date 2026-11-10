@@ -6,6 +6,7 @@
 
 import { Button, Input, Message, Popover, Select, Spin, Switch, Tag, Tooltip } from '@arco-design/web-react';
 import React, { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 import { ipcBridge } from '@/common';
@@ -34,6 +35,7 @@ const TelegramPaperPlaneIcon: React.FC<{ className?: string; size?: number }> = 
 );
 
 const TeamTelegramBridgePopover: React.FC<TeamTelegramBridgePopoverProps> = ({ teamId, teamName }) => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [visible, setVisible] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -72,7 +74,7 @@ const TeamTelegramBridgePopover: React.FC<TeamTelegramBridgePopoverProps> = ({ t
     });
     const unsubNotify = ipcBridge.team.proactiveNotification.on((ev) => {
       if (ev.team_id === teamId) {
-        Message.info(`[${ev.team_name}] Đã gửi báo cáo chủ động (${ev.kind})`);
+        Message.info(t('team.telegramBridge.proactiveReportSent', { kind: ev.kind }));
       }
     });
     return () => {
@@ -80,7 +82,7 @@ const TeamTelegramBridgePopover: React.FC<TeamTelegramBridgePopoverProps> = ({ t
       unsubAuth();
       unsubNotify();
     };
-  }, [mutate, teamId]);
+  }, [mutate, t, teamId]);
 
   const handleToggleNotify = useCallback(
     async (checked: boolean) => {
@@ -91,14 +93,18 @@ const TeamTelegramBridgePopover: React.FC<TeamTelegramBridgePopoverProps> = ({ t
           notify_enabled: checked,
         });
         await mutate(updated, false);
-        Message.success(checked ? 'Đã bật báo cáo chủ động qua Telegram' : 'Đã tắt báo cáo chủ động qua Telegram');
+        Message.success(
+          checked
+            ? t('team.telegramBridge.notifyEnabledSuccess')
+            : t('team.telegramBridge.notifyDisabledSuccess')
+        );
       } catch (err) {
-        Message.error(`Không thể lưu cài đặt Telegram: ${String(err)}`);
+        Message.error(t('team.telegramBridge.saveSettingsFailed', { error: String(err) }));
       } finally {
         setSaving(false);
       }
     },
-    [mutate, teamId]
+    [mutate, t, teamId]
   );
 
   const handleToggleActiveDm = useCallback(
@@ -112,16 +118,16 @@ const TeamTelegramBridgePopover: React.FC<TeamTelegramBridgePopoverProps> = ({ t
         await mutate(updated, false);
         Message.success(
           checked
-            ? `Đã đặt "${teamName}" làm Team nhận tin nhắn trực tiếp trên Telegram DM`
-            : `Đã gỡ "${teamName}" khỏi kênh mặc định trên Telegram DM`
+            ? t('team.telegramBridge.activeDmSetSuccess', { name: teamName })
+            : t('team.telegramBridge.activeDmRemovedSuccess', { name: teamName })
         );
       } catch (err) {
-        Message.error(`Không thể cập nhật DM target: ${String(err)}`);
+        Message.error(t('team.telegramBridge.updateDmFailed', { error: String(err) }));
       } finally {
         setSaving(false);
       }
     },
-    [mutate, teamId, teamName]
+    [mutate, t, teamId, teamName]
   );
 
   const handleStreamModeChange = useCallback(
@@ -135,22 +141,22 @@ const TeamTelegramBridgePopover: React.FC<TeamTelegramBridgePopoverProps> = ({ t
         await mutate(updated, false);
         Message.success(
           mode === 'milestones'
-            ? 'Đã chuyển sang chế độ Lọc thông minh (Milestones)'
-            : 'Đã chuyển sang chế độ Gửi toàn bộ phiên (Full Stream)'
+            ? t('team.telegramBridge.streamModeMilestonesSuccess')
+            : t('team.telegramBridge.streamModeFullSuccess')
         );
       } catch (err) {
-        Message.error(`Không thể đổi chế độ báo cáo: ${String(err)}`);
+        Message.error(t('team.telegramBridge.changeStreamModeFailed', { error: String(err) }));
       } finally {
         setSaving(false);
       }
     },
-    [mutate, teamId]
+    [mutate, t, teamId]
   );
 
   const handleSaveGroupBinding = useCallback(async () => {
     const trimmedChat = groupChatId.trim();
     if (!trimmedChat) {
-      Message.warning('Vui lòng nhập Telegram Group Chat ID (ví dụ: -1001234567890)');
+      Message.warning(t('team.telegramBridge.groupChatIdRequired'));
       return;
     }
     setSaving(true);
@@ -161,13 +167,13 @@ const TeamTelegramBridgePopover: React.FC<TeamTelegramBridgePopoverProps> = ({ t
         group_thread_id: groupThreadId.trim() ? groupThreadId.trim() : null,
       });
       await mutate(updated, false);
-      Message.success('Đã gắn Team với Nhóm / Topic Telegram');
+      Message.success(t('team.telegramBridge.groupBindingSuccess'));
     } catch (err) {
-      Message.error(`Không thể lưu gắn nhóm: ${String(err)}`);
+      Message.error(t('team.telegramBridge.saveGroupFailed', { error: String(err) }));
     } finally {
       setSaving(false);
     }
-  }, [groupChatId, groupThreadId, mutate, teamId]);
+  }, [groupChatId, groupThreadId, mutate, t, teamId]);
 
   const handleClearGroupBinding = useCallback(async () => {
     setSaving(true);
@@ -178,13 +184,13 @@ const TeamTelegramBridgePopover: React.FC<TeamTelegramBridgePopoverProps> = ({ t
       setGroupChatId('');
       setGroupThreadId('');
       await mutate(updated, false);
-      Message.success('Đã gỡ gắn Nhóm / Topic Telegram');
+      Message.success(t('team.telegramBridge.groupUnbindingSuccess'));
     } catch (err) {
-      Message.error(`Không thể gỡ gắn nhóm: ${String(err)}`);
+      Message.error(t('team.telegramBridge.unbindGroupFailed', { error: String(err) }));
     } finally {
       setSaving(false);
     }
-  }, [mutate, teamId]);
+  }, [mutate, t, teamId]);
 
   const isConnectedAndPaired = Boolean(config?.telegram_connected && config?.has_authorized_user);
   const isActiveBridge = Boolean(
@@ -205,18 +211,18 @@ const TeamTelegramBridgePopover: React.FC<TeamTelegramBridgePopoverProps> = ({ t
             <TelegramPaperPlaneIcon size={15} />
           </span>
           <div className='flex flex-col min-w-0 flex-1'>
-            <span className='text-13px font-600 truncate'>Cầu nối Telegram · Leader 👑</span>
-            <span className='text-11px text-t-tertiary truncate'>Team: {teamName}</span>
+            <span className='text-13px font-600 truncate'>{t('team.telegramBridge.popoverTitle')}</span>
+            <span className='text-11px text-t-tertiary truncate'>{t('team.telegramBridge.popoverTeamLabel', { name: teamName })}</span>
           </div>
         </div>
         <span className='shrink-0 inline-flex items-center'>
           {config?.telegram_connected ? (
             <Tag size='small' color={config.has_authorized_user ? 'green' : 'orangered'}>
-              {config.bot_username ? `@${config.bot_username}` : 'Đã kết nối'}
+              {config.bot_username ? `@${config.bot_username}` : t('team.telegramBridge.connectedTag')}
             </Tag>
           ) : (
             <Tag size='small' color='gray'>
-              Chưa bật Bot
+              {t('team.telegramBridge.botNotEnabledTag')}
             </Tag>
           )}
         </span>
@@ -232,8 +238,8 @@ const TeamTelegramBridgePopover: React.FC<TeamTelegramBridgePopoverProps> = ({ t
             <div className='rd-8px bg-fill-2 border border-solid border-arco-2 p-10px flex flex-col gap-8px text-12px box-border'>
               <span className='text-t-secondary leading-18px break-words'>
                 {!config?.telegram_plugin_enabled
-                  ? 'Bot Telegram chưa được bật. Hãy bật Telegram trong Cài đặt WebUI / Kênh để dùng chung 1 Bot cho toàn bộ các Team.'
-                  : 'Bot đã bật nhưng chưa ghép đôi tài khoản Telegram của anh. Hãy nhắn cho Bot để lấy mã ghép đôi.'}
+                  ? t('team.telegramBridge.botDisabledAlert')
+                  : t('team.telegramBridge.botNotPairedAlert')}
               </span>
               <Button
                 size='mini'
@@ -243,16 +249,16 @@ const TeamTelegramBridgePopover: React.FC<TeamTelegramBridgePopoverProps> = ({ t
                   void navigate('/settings/webui');
                 }}
               >
-                Mở cài đặt Kênh Telegram
+                {t('team.telegramBridge.openChannelSettingsBtn')}
               </Button>
             </div>
           )}
 
           <div className='flex items-center justify-between gap-12px w-full min-w-0'>
             <div className='flex flex-col gap-2px min-w-0 flex-1'>
-              <span className='text-13px font-500'>Báo cáo chủ động từ Leader</span>
+              <span className='text-13px font-500'>{t('team.telegramBridge.proactiveReportsTitle')}</span>
               <span className='text-11px text-t-tertiary leading-16px break-words'>
-                Leader tự gửi tiến độ, câu hỏi xin duyệt, lỗi member & kết quả về điện thoại
+                {t('team.telegramBridge.proactiveReportsDesc')}
               </span>
             </div>
             <Switch
@@ -267,9 +273,9 @@ const TeamTelegramBridgePopover: React.FC<TeamTelegramBridgePopoverProps> = ({ t
 
           <div className='flex items-center justify-between gap-12px w-full min-w-0'>
             <div className='flex flex-col gap-2px min-w-0 flex-1'>
-              <span className='text-13px font-500'>Chat chính trên DM 1-1</span>
+              <span className='text-13px font-500'>{t('team.telegramBridge.primaryDmTitle')}</span>
               <span className='text-11px text-t-tertiary leading-16px break-words'>
-                Nhắn riêng với Bot sẽ vào thẳng Leader của Team này (hoặc gõ <code>/team</code> / vuốt Reply)
+                {t('team.telegramBridge.primaryDmDesc')}
               </span>
             </div>
             <Switch
@@ -284,7 +290,7 @@ const TeamTelegramBridgePopover: React.FC<TeamTelegramBridgePopoverProps> = ({ t
           </div>
 
           <div className='flex flex-col gap-5px w-full min-w-0'>
-            <span className='text-12px font-500 text-t-secondary'>Chế độ lọc thông báo</span>
+            <span className='text-12px font-500 text-t-secondary'>{t('team.telegramBridge.streamModeLabel')}</span>
             <Select
               size='small'
               className='w-full'
@@ -295,8 +301,8 @@ const TeamTelegramBridgePopover: React.FC<TeamTelegramBridgePopoverProps> = ({ t
               getPopupContainer={(node) => (node.closest('.arco-popover') as Element | null) || document.body}
               onChange={(val) => void handleStreamModeChange(val as TeamTelegramStreamMode)}
             >
-              <Select.Option value='milestones'>Milestones — Lọc thông minh (Khuyên dùng)</Select.Option>
-              <Select.Option value='full_stream'>Full Stream — Báo mọi phiên hoàn tất</Select.Option>
+              <Select.Option value='milestones'>{t('team.telegramBridge.streamModeMilestonesOption')}</Select.Option>
+              <Select.Option value='full_stream'>{t('team.telegramBridge.streamModeFullOption')}</Select.Option>
             </Select>
           </div>
 
@@ -307,9 +313,15 @@ const TeamTelegramBridgePopover: React.FC<TeamTelegramBridgePopoverProps> = ({ t
               onClick={() => setShowGroupSection((v) => !v)}
             >
               <span className='font-500 truncate min-w-0 flex-1'>
-                Gắn Nhóm / Supergroup Topic riêng {config?.group_chat_id ? '• Đã gắn' : '(Tuỳ chọn)'}
+                {t('team.telegramBridge.linkGroupHeader', {
+                  status: config?.group_chat_id
+                    ? t('team.telegramBridge.linkedStatus')
+                    : t('team.telegramBridge.optionalStatus'),
+                })}
               </span>
-              <span className='text-11px text-t-tertiary shrink-0'>{showGroupSection ? 'Thu gọn' : 'Mở rộng'}</span>
+              <span className='text-11px text-t-tertiary shrink-0'>
+                {showGroupSection ? t('common.collapse') : t('common.expandMore')}
+              </span>
             </div>
 
             {showGroupSection && (
@@ -317,14 +329,14 @@ const TeamTelegramBridgePopover: React.FC<TeamTelegramBridgePopoverProps> = ({ t
                 <Input
                   size='small'
                   data-testid='team-tg-group-chat-input'
-                  placeholder='Group Chat ID (vd: -1001234567890)'
+                  placeholder={t('team.telegramBridge.groupChatIdPlaceholder')}
                   value={groupChatId}
                   onChange={setGroupChatId}
                 />
                 <Input
                   size='small'
                   data-testid='team-tg-group-thread-input'
-                  placeholder='Topic Thread ID (tuỳ chọn, vd: 42)'
+                  placeholder={t('team.telegramBridge.topicThreadIdPlaceholder')}
                   value={groupThreadId}
                   onChange={setGroupThreadId}
                 />
@@ -337,7 +349,7 @@ const TeamTelegramBridgePopover: React.FC<TeamTelegramBridgePopoverProps> = ({ t
                       disabled={saving}
                       onClick={() => void handleClearGroupBinding()}
                     >
-                      Gỡ gắn
+                      {t('team.telegramBridge.unlinkBtn')}
                     </Button>
                   )}
                   <Button
@@ -347,7 +359,7 @@ const TeamTelegramBridgePopover: React.FC<TeamTelegramBridgePopoverProps> = ({ t
                     loading={saving}
                     onClick={() => void handleSaveGroupBinding()}
                   >
-                    Lưu gắn nhóm
+                    {t('team.telegramBridge.saveLinkBtn')}
                   </Button>
                 </div>
               </div>
@@ -355,9 +367,7 @@ const TeamTelegramBridgePopover: React.FC<TeamTelegramBridgePopoverProps> = ({ t
           </div>
 
           <div className='w-full box-border rd-8px bg-fill-1 border border-solid border-arco-2 px-10px py-8px text-11px text-t-secondary leading-16px break-words'>
-            Mẹo trên Telegram: gõ <code>/team</code> đổi Team, <code>/room</code> vào Phòng Họp Liên Team,{' '}
-            <code>/status</code> xem Task Board, hoặc <b>vuốt Reply</b> vào bất kỳ báo cáo nào để giao việc lại đúng
-            Leader đó.
+            {t('team.telegramBridge.tipsFooter')}
           </div>
         </>
       )}
@@ -377,7 +387,7 @@ const TeamTelegramBridgePopover: React.FC<TeamTelegramBridgePopoverProps> = ({ t
       }}
       content={popoverContent}
     >
-      <Tooltip content='Kết nối & báo cáo chủ động qua Telegram'>
+      <Tooltip content={t('team.telegramBridge.buttonTooltip')}>
         <button
           type='button'
           data-testid='team-telegram-bridge-btn'

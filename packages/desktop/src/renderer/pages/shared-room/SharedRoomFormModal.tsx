@@ -6,6 +6,7 @@
 
 import { Button, Checkbox, Input, InputNumber, Message, Modal, Select, Tag } from '@arco-design/web-react';
 import React, { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ipcBridge } from '@/common';
 import type { ISharedRoom } from '@/common/types/sharedRoom';
 import { useTeamList } from '@renderer/pages/team/hooks/useTeamList';
@@ -19,6 +20,7 @@ interface SharedRoomFormModalProps {
 }
 
 const SharedRoomFormModal: React.FC<SharedRoomFormModalProps> = ({ visible, mode, initialRoom, onClose, onSaved }) => {
+  const { t } = useTranslation();
   const { teams } = useTeamList();
 
   const [name, setName] = useState('');
@@ -49,7 +51,7 @@ const SharedRoomFormModal: React.FC<SharedRoomFormModalProps> = ({ visible, mode
     }
   }, [initialRoom, mode, visible]);
 
-  const selectedTeams = useMemo(() => teams.filter((t) => selectedTeamIds.includes(t.id)), [teams, selectedTeamIds]);
+  const selectedTeams = useMemo(() => teams.filter((team) => selectedTeamIds.includes(team.id)), [teams, selectedTeamIds]);
 
   useEffect(() => {
     if (selectedTeamIds.length === 0) {
@@ -71,11 +73,11 @@ const SharedRoomFormModal: React.FC<SharedRoomFormModalProps> = ({ visible, mode
   const handleSubmit = async () => {
     const trimmedName = name.trim();
     if (!trimmedName) {
-      Message.warning('Vui lòng nhập tên Phòng Họp Liên Team');
+      Message.warning(t('team.sharedRoom.form.nameRequired'));
       return;
     }
     if (selectedTeamIds.length === 0) {
-      Message.warning('Vui lòng chọn ít nhất 1 Team tham gia phòng họp');
+      Message.warning(t('team.sharedRoom.form.memberRequired'));
       return;
     }
 
@@ -92,7 +94,7 @@ const SharedRoomFormModal: React.FC<SharedRoomFormModalProps> = ({ visible, mode
           host_team_id: hostTeamId || selectedTeamIds[0],
           max_hops: maxHops,
         });
-        Message.success('Đã cập nhật Phòng Họp Liên Team');
+        Message.success(t('team.sharedRoom.form.updateSuccess'));
       } else {
         saved = await ipcBridge.sharedRoom.create.invoke({
           name: trimmedName,
@@ -102,12 +104,12 @@ const SharedRoomFormModal: React.FC<SharedRoomFormModalProps> = ({ visible, mode
           host_team_id: hostTeamId || selectedTeamIds[0],
           max_hops: maxHops,
         });
-        Message.success('Đã tạo Phòng Họp Liên Team mới');
+        Message.success(t('team.sharedRoom.form.createSuccess'));
       }
       onSaved(saved);
       onClose();
     } catch (err) {
-      Message.error(`Không thể lưu Phòng Họp Liên Team: ${String(err)}`);
+      Message.error(t('team.sharedRoom.form.saveFailed', { error: String(err) }));
     } finally {
       setSaving(false);
     }
@@ -115,14 +117,14 @@ const SharedRoomFormModal: React.FC<SharedRoomFormModalProps> = ({ visible, mode
 
   return (
     <Modal
-      title={mode === 'edit' ? 'Chỉnh sửa Phòng Họp Liên Team' : 'Tạo Phòng Họp Liên Team (Leader Hub)'}
+      title={mode === 'edit' ? t('team.sharedRoom.form.editTitle') : t('team.sharedRoom.form.createTitle')}
       visible={visible}
       onCancel={onClose}
       style={{ width: 640, maxWidth: 'calc(100vw - 32px)' }}
       footer={
         <div className='flex items-center justify-end gap-8px'>
           <Button onClick={onClose} disabled={saving}>
-            Huỷ
+            {t('common.cancel')}
           </Button>
           <Button
             type='primary'
@@ -131,23 +133,22 @@ const SharedRoomFormModal: React.FC<SharedRoomFormModalProps> = ({ visible, mode
             data-testid='shared-room-submit-btn'
             onClick={() => void handleSubmit()}
           >
-            {mode === 'edit' ? 'Lưu thay đổi' : 'Tạo Phòng Họp'}
+            {mode === 'edit' ? t('team.sharedRoom.form.saveChanges') : t('team.sharedRoom.form.createRoom')}
           </Button>
         </div>
       }
     >
       <div className='flex flex-col gap-14px text-t-primary'>
         <div className='text-12px text-t-secondary leading-18px bg-fill-1 rd-8px px-12px py-8px border border-solid border-arco-2'>
-          Mỗi Team tham gia sẽ cử <b>Leader 👑</b> đại diện ngồi trong phòng chung cùng anh để trao đổi chéo, chuyển
-          giao file qua <code>Shared Artifacts</code> và giao nhận task liên team (có hỗ trợ đồng bộ qua Telegram).
+          {t('team.sharedRoom.form.helperDesc')}
         </div>
 
         <div className='flex flex-col gap-4px'>
           <span className='text-13px font-500'>
-            Tên phòng họp <span className='text-danger-6'>*</span>
+            {t('team.sharedRoom.form.nameLabel')} <span className='text-danger-6'>*</span>
           </span>
           <Input
-            placeholder='Ví dụ: Kênh Phối Hợp NhanTown × VibeClip'
+            placeholder={t('team.sharedRoom.form.namePlaceholder')}
             value={name}
             onChange={setName}
             data-testid='shared-room-name-input'
@@ -155,9 +156,9 @@ const SharedRoomFormModal: React.FC<SharedRoomFormModalProps> = ({ visible, mode
         </div>
 
         <div className='flex flex-col gap-4px'>
-          <span className='text-13px font-500'>Mô tả mục tiêu chung</span>
+          <span className='text-13px font-500'>{t('team.sharedRoom.form.descLabel')}</span>
           <Input
-            placeholder='Mục tiêu dự án hoặc phạm vi phối hợp giữa các Team...'
+            placeholder={t('team.sharedRoom.form.descPlaceholder')}
             value={description}
             onChange={setDescription}
           />
@@ -166,7 +167,8 @@ const SharedRoomFormModal: React.FC<SharedRoomFormModalProps> = ({ visible, mode
         <div className='flex flex-col gap-6px'>
           <div className='flex items-center justify-between'>
             <span className='text-13px font-500'>
-              Chọn các Team tham gia ({selectedTeamIds.length}/{teams.length}) <span className='text-danger-6'>*</span>
+              {t('team.sharedRoom.form.selectTeamsCount', { selected: selectedTeamIds.length, total: teams.length })}{' '}
+              <span className='text-danger-6'>*</span>
             </span>
             {teams.length > 1 && (
               <button
@@ -176,14 +178,16 @@ const SharedRoomFormModal: React.FC<SharedRoomFormModalProps> = ({ visible, mode
                   setSelectedTeamIds(selectedTeamIds.length === teams.length ? [] : teams.map((item) => item.id))
                 }
               >
-                {selectedTeamIds.length === teams.length ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
+                {selectedTeamIds.length === teams.length
+                  ? t('team.sharedRoom.form.deselectAll')
+                  : t('team.sharedRoom.form.selectAll')}
               </button>
             )}
           </div>
 
           {teams.length === 0 ? (
             <div className='rd-8px border border-dashed border-arco-2 p-16px text-center text-12px text-t-tertiary'>
-              Chưa có Team nào. Hãy tạo ít nhất 1 Team ở mục Teams trước.
+              {t('team.sharedRoom.form.noTeamsHint')}
             </div>
           ) : (
             <div className='max-h-180px overflow-y-auto rd-8px border border-solid border-arco-2 divide-y divide-arco-1'>
@@ -205,13 +209,16 @@ const SharedRoomFormModal: React.FC<SharedRoomFormModalProps> = ({ visible, mode
                       <div className='flex flex-col min-w-0'>
                         <span className='text-13px font-500 truncate'>{tItem.name}</span>
                         <span className='text-11px text-t-tertiary truncate'>
-                          Leader 👑: {leader?.assistant_name ?? 'Lead'} • {tItem.assistants.length} thành viên
+                          {t('team.sharedRoom.form.teamMemberCountDesc', {
+                            leader: leader?.assistant_name ?? 'Lead',
+                            count: tItem.assistants.length,
+                          })}
                         </span>
                       </div>
                     </div>
                     {hostTeamId === tItem.id && checked && (
                       <Tag size='small' color='arcoblue'>
-                        Chủ trì 🪑
+                        {t('team.sharedRoom.form.chairTag')}
                       </Tag>
                     )}
                   </div>
@@ -223,9 +230,9 @@ const SharedRoomFormModal: React.FC<SharedRoomFormModalProps> = ({ visible, mode
 
         <div className='grid grid-cols-2 gap-12px'>
           <div className='flex flex-col gap-4px'>
-            <span className='text-12px font-500 text-t-secondary'>Leader Chủ trì (Chair Team)</span>
+            <span className='text-12px font-500 text-t-secondary'>{t('team.sharedRoom.form.chairTeamLabel')}</span>
             <Select
-              placeholder='Chọn Team chủ trì'
+              placeholder={t('team.sharedRoom.form.chairTeamPlaceholder')}
               value={hostTeamId || undefined}
               disabled={selectedTeams.length === 0}
               onChange={(val) => setHostTeamId(val as string)}
@@ -237,12 +244,12 @@ const SharedRoomFormModal: React.FC<SharedRoomFormModalProps> = ({ visible, mode
               ))}
             </Select>
             <span className='text-11px text-t-tertiary'>
-              Nhận điều phối khi tin nhắn không gắn <code>@TeamName</code> cụ thể
+              {t('team.sharedRoom.form.chairTeamDesc')}
             </span>
           </div>
 
           <div className='flex flex-col gap-4px'>
-            <span className='text-12px font-500 text-t-secondary'>Giới hạn lượt tự động (max_hops)</span>
+            <span className='text-12px font-500 text-t-secondary'>{t('team.sharedRoom.form.maxHopsLabel')}</span>
             <InputNumber
               min={1}
               max={30}
@@ -250,16 +257,16 @@ const SharedRoomFormModal: React.FC<SharedRoomFormModalProps> = ({ visible, mode
               onChange={(val) => setMaxHops(typeof val === 'number' ? val : 5)}
             />
             <span className='text-11px text-t-tertiary'>
-              Tạm dừng để hỏi anh sau N lượt các Leader tự gọi nhau liên tiếp
+              {t('team.sharedRoom.form.maxHopsDesc')}
             </span>
           </div>
         </div>
 
         <div className='flex flex-col gap-4px'>
-          <span className='text-12px font-500 text-t-secondary'>Quy tắc phối hợp trong phòng (Tuỳ chọn)</span>
+          <span className='text-12px font-500 text-t-secondary'>{t('team.sharedRoom.form.rulesLabel')}</span>
           <Input.TextArea
             rows={2}
-            placeholder='Ví dụ: Team Backend chốt schema vào Shared Artifacts trước khi gọi @Frontend...'
+            placeholder={t('team.sharedRoom.form.rulesPlaceholder')}
             value={rules}
             onChange={setRules}
           />

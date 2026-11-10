@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 
 const projectRoot = resolve(__dirname, '../..');
-const itWithBash = spawnSync('bash', ['--version'], { encoding: 'utf8' }).status === 0 ? it : it.skip;
+const gitBash = 'C:\\Program Files\\Git\\bin\\bash.exe';
+const bashCmd = process.platform === 'win32' && existsSync(gitBash) ? gitBash : 'bash';
+const itWithBash = spawnSync(bashCmd, ['--version'], { encoding: 'utf8' }).status === 0 ? it : it.skip;
 
 function readProjectFile(path: string): string {
   return readFileSync(resolve(projectRoot, path), 'utf8');
@@ -57,8 +59,13 @@ describe('release packaging configuration', () => {
     const outputDir = resolve(tempDir, 'release-assets');
 
     try {
-      const env = { ...process.env, MOCK_VERSION: '1.0.0' };
-      const createResult = spawnSync('bash', ['scripts/create-mock-release-artifacts.sh', artifactsDir], {
+      const env = {
+        ...process.env,
+        PATH: process.env.PATH || process.env.Path,
+        Path: process.env.PATH || process.env.Path,
+        MOCK_VERSION: '1.0.0',
+      };
+      const createResult = spawnSync(bashCmd, ['scripts/create-mock-release-artifacts.sh', artifactsDir], {
         cwd: projectRoot,
         env,
         encoding: 'utf8',
@@ -67,7 +74,7 @@ describe('release packaging configuration', () => {
 
       rmSync(resolve(artifactsDir, 'macos-build-arm64', 'AionUi-1.0.0-mac-arm64.zip'), { force: true });
 
-      const prepareResult = spawnSync('bash', ['scripts/prepare-release-assets.sh', artifactsDir, outputDir], {
+      const prepareResult = spawnSync(bashCmd, ['scripts/prepare-release-assets.sh', artifactsDir, outputDir], {
         cwd: projectRoot,
         env,
         encoding: 'utf8',
@@ -78,5 +85,5 @@ describe('release packaging configuration', () => {
     } finally {
       rmSync(tempDir, { force: true, recursive: true });
     }
-  });
+  }, 30000);
 });

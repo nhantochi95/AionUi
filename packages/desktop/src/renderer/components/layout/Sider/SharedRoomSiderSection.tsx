@@ -8,6 +8,7 @@ import { Communication, Delete, EditOne, Plus, Pushpin, Right } from '@icon-park
 import { Message, Modal, Tooltip } from '@arco-design/web-react';
 import classNames from 'classnames';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { iconColors } from '@renderer/styles/colors';
 import { cleanupSiderTooltips } from '@renderer/utils/ui/siderTooltip';
@@ -36,6 +37,7 @@ const SharedRoomSiderSection: React.FC<SharedRoomSiderSectionProps> = ({
   siderTooltipProps,
   onSessionClick,
 }) => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { rooms, mutate: refreshRooms, removeRoom } = useSharedRoomList();
 
@@ -85,25 +87,25 @@ const SharedRoomSiderSection: React.FC<SharedRoomSiderSectionProps> = ({
   const handleDeleteRoom = useCallback(
     (room: ISharedRoom) => {
       Modal.confirm({
-        title: 'Xóa Phòng Họp Liên Team?',
-        content: `Phòng "${room.name}" sẽ bị xóa khỏi danh sách kênh chung (các Team thành viên vẫn được giữ nguyên 100%).`,
-        okText: 'Xóa phòng',
-        cancelText: 'Huỷ',
+        title: t('team.sharedRoom.deleteConfirmTitle'),
+        content: t('team.sharedRoom.deleteConfirmContent', { name: room.name }),
+        okText: t('team.sharedRoom.deleteRoomOk'),
+        cancelText: t('common.cancel'),
         okButtonProps: { status: 'danger' },
         onOk: async () => {
           try {
             await removeRoom(room.id);
-            Message.success(`Đã xóa phòng "${room.name}"`);
+            Message.success(t('team.sharedRoom.deleteSuccess', { name: room.name }));
             if (pathname.startsWith(`/shared-room/${room.id}`)) {
               void navigate('/guid');
             }
           } catch (err) {
-            Message.error(`Không thể xóa phòng: ${String(err)}`);
+            Message.error(t('team.sharedRoom.deleteFailed', { error: String(err) }));
           }
         },
       });
     },
-    [navigate, pathname, removeRoom]
+    [navigate, pathname, removeRoom, t]
   );
 
   return (
@@ -118,7 +120,7 @@ const SharedRoomSiderSection: React.FC<SharedRoomSiderSectionProps> = ({
                 <Tooltip
                   key={room.id}
                   {...siderTooltipProps}
-                  content={`#${room.name} (${room.members.length} Teams)`}
+                  content={t('team.sharedRoom.collapsedTooltip', { name: room.name, count: room.members.length })}
                   position='right'
                 >
                   <div
@@ -152,7 +154,7 @@ const SharedRoomSiderSection: React.FC<SharedRoomSiderSectionProps> = ({
             onClick={() => setExpanded((v) => !v)}
           >
             <span className='text-14px text-t-tertiary sider-section-title group-hover/label:text-t-primary transition-colors font-[500] leading-none'>
-              Kênh Liên Team
+              {t('team.sharedRoom.siderTitle')}
             </span>
             <span className='ms-2px flex items-center justify-center opacity-0 group-hover/label:opacity-100 transition-opacity text-t-tertiary shrink-0'>
               <Right
@@ -161,7 +163,7 @@ const SharedRoomSiderSection: React.FC<SharedRoomSiderSectionProps> = ({
                 className={classNames('transition-transform duration-150', { 'rotate-90': expanded })}
               />
             </span>
-            <Tooltip content='Tạo Phòng Họp Liên Team mới' position='top'>
+            <Tooltip content={t('team.sharedRoom.createNewTooltip')} position='top'>
               <div
                 data-testid='shared-room-create-btn'
                 className='ms-auto -me-4px size-20px rd-4px flex items-center justify-center hover:bg-fill-4 transition-all shrink-0 cursor-pointer text-t-secondary hover:text-t-primary'
@@ -191,17 +193,17 @@ const SharedRoomSiderSection: React.FC<SharedRoomSiderSectionProps> = ({
                 {
                   key: 'pin',
                   icon: <Pushpin theme='outline' size='14' />,
-                  label: isPinned ? 'Bỏ ghim' : 'Ghim kênh',
+                  label: isPinned ? t('team.sharedRoom.unpin') : t('team.sharedRoom.pin'),
                 },
                 {
                   key: 'edit',
                   icon: <EditOne theme='outline' size='14' />,
-                  label: 'Cấu hình phòng',
+                  label: t('team.sharedRoom.configureRoom'),
                 },
                 {
                   key: 'delete',
                   icon: <Delete theme='outline' size='14' />,
-                  label: 'Xóa phòng',
+                  label: t('team.sharedRoom.deleteRoom'),
                 },
               ];
 
@@ -235,8 +237,8 @@ const SharedRoomSiderSection: React.FC<SharedRoomSiderSectionProps> = ({
                     <span
                       title={
                         isHopPaused
-                          ? 'Đang tạm dừng chờ anh duyệt thêm lượt thảo luận'
-                          : 'Có Leader đang xử lý handoff liên team'
+                          ? t('team.sharedRoom.pausedWaitingHopsTitle')
+                          : t('team.sharedRoom.activeHandoffTitle')
                       }
                       className={classNames(
                         'absolute end-12px top-1/2 -translate-y-1/2 w-8px h-8px rounded-full pointer-events-none z-10 group-hover:hidden',

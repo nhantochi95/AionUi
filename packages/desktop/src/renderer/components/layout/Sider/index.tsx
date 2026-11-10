@@ -7,7 +7,8 @@ import { useAuth } from '@renderer/hooks/context/AuthContext';
 import { useLayoutContext } from '@renderer/hooks/context/LayoutContext';
 import { blurActiveElement } from '@renderer/utils/ui/focus';
 import { useThemeContext } from '@renderer/hooks/context/ThemeContext';
-import { SiderToolbar, SiderSearchEntry, SiderScheduledEntry, SiderAssistantEntry } from './SiderNav';
+import { SiderToolbar, SiderSearchEntry, SiderScheduledEntry, SiderAssistantEntry, SiderInboxEntry } from './SiderNav';
+import { useInboxPendingCount } from '@renderer/hooks/inbox/useInboxPendingCount';
 import SiderFooter from './SiderFooter';
 import TeamSiderSection from './TeamSiderSection';
 import SharedRoomSiderSection from './SharedRoomSiderSection';
@@ -32,6 +33,7 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
   const { logout, status } = useAuth();
   const { theme, setTheme } = useThemeContext();
   const [isBatchMode, setIsBatchMode] = useState(false);
+  const pendingInboxCount = useInboxPendingCount();
   const isSettings = pathname.startsWith('/settings');
   const lastNonSettingsPathRef = useRef('/guid');
   const showLogout =
@@ -82,6 +84,19 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
     // keeps the preview open when switching between conversations of the same
     // scope and closes it only when the scope (today = workspace) actually changes.
     setIsBatchMode(false);
+  };
+
+  const handleInboxClick = () => {
+    cleanupSiderTooltips();
+    blurActiveElement();
+    closePreview();
+    setIsBatchMode(false);
+    Promise.resolve(navigate('/inbox')).catch((error) => {
+      console.error('Navigation failed:', error);
+    });
+    if (onSessionClick) {
+      onSessionClick();
+    }
   };
 
   const handleScheduledClick = () => {
@@ -208,6 +223,15 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
               collapsed={collapsed}
               siderTooltipProps={siderTooltipProps}
               onClick={handleAssistantClick}
+            />
+            {/* Action Inbox nav entry - fixed above Scheduled */}
+            <SiderInboxEntry
+              isMobile={isMobile}
+              isActive={pathname === '/inbox'}
+              collapsed={collapsed}
+              count={pendingInboxCount}
+              siderTooltipProps={siderTooltipProps}
+              onClick={handleInboxClick}
             />
             {/* Scheduled tasks nav entry - fixed above scroll */}
             <SiderScheduledEntry

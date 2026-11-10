@@ -208,7 +208,7 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
         />
       </div>
 
-      <div className='text-13px font-500 leading-20px text-t-secondary'>Telegram</div>
+      <div className='text-13px font-500 leading-20px text-t-secondary'>{t('team.create.telegramLabel')}</div>
       <div className='flex flex-wrap items-center gap-12px text-12px text-t-secondary'>
         <label className='inline-flex items-center gap-6px cursor-pointer select-none'>
           <Switch
@@ -217,7 +217,7 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
             checked={enableTelegramBridge}
             onChange={setEnableTelegramBridge}
           />
-          <span>Leader báo cáo chủ động</span>
+          <span>{t('team.create.telegramProactiveNotice')}</span>
         </label>
         {enableTelegramBridge && (
           <label className='inline-flex items-center gap-6px cursor-pointer select-none text-t-tertiary'>
@@ -227,7 +227,7 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
               checked={setTelegramDmDefault}
               onChange={setSetTelegramDmDefault}
             />
-            <span>Đặt làm chat DM hiện tại</span>
+            <span>{t('team.create.telegramActiveDmDefault')}</span>
           </label>
         )}
       </div>
