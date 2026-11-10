@@ -2657,3 +2657,54 @@ export const wallets = {
   spendUpdated: wsEmitter<{ spent_usd: number; soft_warning: boolean; hard_blocked: boolean }>('wallet:spend_updated'),
 };
 
+// ---------------------------------------------------------------------------
+// Team Hub: Connected Models, Quick Member, Context Compaction & Hot-Swap
+// ---------------------------------------------------------------------------
+
+import type {
+  CompactSlotOutcomeDto,
+  CompactTeamContextRequest,
+  CompactTeamContextResponse,
+  ConnectedModelsCatalogDto,
+  QuickCreateMemberRequest,
+  QuickCreateMemberResponse,
+  SlotContextStatusDto,
+  SwitchSlotModelOutcomeDto,
+  SwitchTeamModelsRequest,
+  SwitchTeamModelsResponse,
+  TeamContextStatusResponse,
+} from '../types/team/teamHubTypes';
+
+export const teamHub = {
+  connectedModels: httpGet<ConnectedModelsCatalogDto, void>('/api/team-hub/connected-models'),
+  quickMember: httpPost<QuickCreateMemberResponse, QuickCreateMemberRequest>('/api/team-hub/quick-member'),
+  contextStatus: httpGet<TeamContextStatusResponse, { team_id: string }>(
+    (p) => `/api/team-hub/teams/${encodeURIComponent(p.team_id)}/context-status`
+  ),
+  compact: httpPost<CompactTeamContextResponse, CompactTeamContextRequest>(
+    (p) => `/api/team-hub/teams/${encodeURIComponent(p.team_id)}/compact`,
+    ({ team_id: _id, ...rest }) => rest
+  ),
+  switchModels: httpPost<SwitchTeamModelsResponse, SwitchTeamModelsRequest>(
+    (p) => `/api/team-hub/teams/${encodeURIComponent(p.team_id)}/switch-models`,
+    ({ team_id: _id, ...rest }) => rest
+  ),
+  contextUsageUpdated: wsEmitter<{
+    user_id?: string;
+    team_id: string;
+    auto_compact_enabled: boolean;
+    slots: SlotContextStatusDto[];
+  }>('team:context_usage'),
+  contextCompacted: wsEmitter<{
+    user_id?: string;
+    team_id: string;
+    outcomes: CompactSlotOutcomeDto[];
+  }>('team:context_compacted'),
+  modelsSwitched: wsEmitter<{
+    user_id?: string;
+    team_id: string;
+    outcomes: SwitchSlotModelOutcomeDto[];
+  }>('team:models_switched'),
+};
+
+

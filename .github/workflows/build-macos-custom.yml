@@ -9,7 +9,7 @@ on:
       aioncore_branch:
         description: 'Branch on nhantochi95/AionCore to bundle'
         required: false
-        default: 'feat/telegram-team-hub'
+        default: 'feat/hybrid-command-hub'
         type: string
 
 permissions:
@@ -49,17 +49,18 @@ jobs:
             sudo softwareupdate --install-rosetta --agree-to-license || true
           fi
 
-      - name: Clone custom AionCore (${{ inputs.aioncore_branch || 'feat/telegram-team-hub' }})
+      - name: Clone custom AionCore (${{ inputs.aioncore_branch || 'feat/hybrid-command-hub' }})
         shell: bash
         run: |
-          AIONCORE_REF="${{ inputs.aioncore_branch || 'feat/telegram-team-hub' }}"
+          AIONCORE_REF="${{ inputs.aioncore_branch || 'feat/hybrid-command-hub' }}"
           rm -rf "${RUNNER_TEMP}/aioncore-src"
           git clone --depth 1 --branch "${AIONCORE_REF}" "https://github.com/${GITHUB_REPOSITORY_OWNER}/AionCore.git" "${RUNNER_TEMP}/aioncore-src"
           git -C "${RUNNER_TEMP}/aioncore-src" log -1 --oneline
 
       - name: Setup Rust toolchain for ${{ matrix.rust_target }}
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: 1.95.0
           targets: ${{ matrix.rust_target }}
 
       - name: Cache AionCore Cargo build

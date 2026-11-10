@@ -1,15 +1,24 @@
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { CloseSmall, Drag, Edit, Plus } from '@icon-park/react';
+import { Message, Tooltip } from '@arco-design/web-react';
+import { CloseSmall, Drag, Edit, Exchange, Lightning, Plus } from '@icon-park/react';
+import classNames from 'classnames';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TeammateStatus } from '@/common/types/team/teamTypes';
+import type { ModelTargetSpec, SlotContextStatusDto } from '@/common/types/team/teamHubTypes';
 import { restrictToHorizontalAxis } from '@/renderer/utils/ui/dndModifiers';
 import AgentStatusBadge from './AgentStatusBadge';
 import TeamAgentIdentity from './TeamAgentIdentity';
 import { useTeamTabs } from '../hooks/TeamTabsContext';
 import TeamAddMemberPopover from './memberPicker/TeamAddMemberPopover';
+import ConnectedModelPickerPopover, {
+  type ModelPickerSelectionMeta,
+  type ModelSlotOption,
+} from './modelHub/ConnectedModelPickerPopover';
+import TeamContextCompactPopover from './modelHub/TeamContextCompactPopover';
+import { resolveSlotContextLevel, useTeamContextAndModels } from './modelHub/useTeamContextAndModels';
 
 const TAB_OVERFLOW_THRESHOLD = 10;
 
@@ -28,6 +37,8 @@ type TeamTabViewProps = {
   color: string;
   /** Number of pending permission confirmations for this agent */
   pendingCount?: number;
+  /** Live context window telemetry for this slot */
+  slotContext?: SlotContextStatusDto;
   /** A drag is in progress somewhere in the bar: freeze hover affordances so pills don't reflow mid-drag. */
   dragActive: boolean;
   onSwitch: (slot_id: string) => void;
@@ -47,6 +58,7 @@ const TeamTabView: React.FC<TeamTabViewProps> = ({
   warmupFailed = false,
   color,
   pendingCount = 0,
+  slotContext,
   dragActive,
   onSwitch,
   onRename,
@@ -103,21 +115,20 @@ const TeamTabView: React.FC<TeamTabViewProps> = ({
     [assistant_name]
   );
 
-  // 胶囊底色恒定浅灰（hover / 选中都不改底色，避免压低彩色名字可读性）；
-  // 选中态用一圈成员自己的身份色边框表示（与彩色名字呼应，明显但不脏）。身份色只落在名字与边框上。
-  // 拖拽走 dnd-kit sortable：hover 时手柄内联出现在头像前（同改名/移除按钮的「hover 增宽」语言，
-  // 不遮头像和状态点），拖动时兄弟胶囊实时让位（transform 平移），松手原位落地。
-  // dragActive 期间冻结其他胶囊的 hover 增宽（拖动经过时布局不能跳）；正被拖动的胶囊则保持
-  // 手柄和按钮可见，宽度全程恒定。
   const showDragHandle = !isLeader && !editing && ((hovered && !dragActive) || isDragging);
   const showHoverActions = !editing && ((hovered && !dragActive) || isDragging);
+
+  const contextPct = slotContext ? Math.max(0, Math.min(100, Math.round(slotContext.usage_percent))) : undefined;
+  const contextLevel =
+    slotContext && contextPct !== undefined ? resolveSlotContextLevel(contextPct, slotContext.level) : undefined;
+
   return (
     <div
       ref={setNodeRef}
       data-testid={`team-tab-${slot_id}`}
       data-team-tab-role={isLeader ? 'leader' : 'teammate'}
       data-active={isActive ? 'true' : 'false'}
-      className='relative flex items-center gap-6px ps-6px pe-10px h-34px max-w-220px cursor-pointer rounded-999px border border-solid transition-colors duration-150 shrink-0 bg-[color:var(--bg-2)]'
+      className='relative flex items-center gap-6px ps-6px pe-10px h-34px max-w-260px cursor-pointer rounded-999px border border-solid transition-colors duration-150 shrink-0 bg-[color:var(--bg-2)]'
       style={{
         ['--mc' as string]: color,
         borderColor: isActive ? color : 'transparent',
@@ -158,7 +169,7 @@ const TeamTabView: React.FC<TeamTabViewProps> = ({
           onKeyDown={handleKeyDown}
         />
       ) : (
-        <div className='min-w-0 flex-1 flex items-center gap-4px'>
+        <div className='min-w-0 flex-1 flex items-center gap-5px'>
           {pendingCount > 0 && (
             <span
               className='shrink-0 text-14px leading-none animate-wiggle'
@@ -193,9 +204,34 @@ const TeamTabView: React.FC<TeamTabViewProps> = ({
               )
             }
           />
+          {slotContext && contextPct !== undefined && contextLevel && (
+            <Tooltip
+              content={t('team.modelHub.contextBadgeTooltip', {
+                used: slotContext.used_tokens.toLocaleString(),
+                max: slotContext.max_tokens.toLocaleString(),
+                pct: contextPct,
+                model: `${slotContext.backend}/${slotContext.model_id || 'default'}`,
+                defaultValue: `Context: ${slotContext.used_tokens} / ${slotContext.max_tokens} tokens (${contextPct}%) • ${slotContext.backend}/${slotContext.model_id || 'default'}`,
+              })}
+            >
+              <span
+                data-testid={`team-tab-context-${slot_id}`}
+                data-context-level={contextLevel}
+                className={classNames(
+                  'shrink-0 px-5px py-0.5px rd-999px text-10px font-mono font-700 leading-14px border border-solid select-none',
+                  contextLevel === 'critical'
+                    ? 'bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/30'
+                    : contextLevel === 'warning'
+                      ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30'
+                      : 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-300 border-emerald-500/25'
+                )}
+              >
+                {contextPct}%
+              </span>
+            </Tooltip>
+          )}
         </div>
       )}
-      {/* hover 时胶囊变宽、露出操作按钮；失焦则收起（胶囊变窄，只剩头像+文字）。拖拽期间冻结，避免布局跳动。 */}
       {showHoverActions && onRename && (
         <span
           data-testid={`team-tab-edit-${slot_id}`}
@@ -238,6 +274,7 @@ type TeamTabsProps = {
 const TeamTabs: React.FC<TeamTabsProps> = ({ onTabClick, pendingCounts, warmingUp = false, failedSlotIds }) => {
   const { t } = useTranslation();
   const {
+    team_id,
     assistants,
     activeSlotId,
     statusMap,
@@ -248,21 +285,96 @@ const TeamTabs: React.FC<TeamTabsProps> = ({ onTabClick, pendingCounts, warmingU
     addAssistant,
     colorOf,
   } = useTeamTabs();
-  // 胶囊操作（增/删/改名）只在「warmup 进行中」禁用。warmup 一旦结束——无论成功还是失败——
-  // 就全部放开。后端对增删改成员本身有并发锁保证串行，前端不需要再叠一层忙碌禁用
-  // （否则删完一个成员，后端重建剩余成员时又会把胶囊锁住，出现「删一个卡一下」的怪体验）。
+
+  const {
+    slots,
+    slotsBySlotId,
+    autoCompactEnabled,
+    autoCompactThresholdPct,
+    maxUsagePercent,
+    highestLevel,
+    compacting,
+    switchingModels,
+    compactTeam,
+    toggleAutoCompact,
+    switchModels,
+  } = useTeamContextAndModels(team_id);
+
   const memberOpsDisabled = warmingUp;
   const tabsContainerRef = useRef<HTMLDivElement>(null);
   const [showLeftFade, setShowLeftFade] = useState(false);
   const [showRightFade, setShowRightFade] = useState(false);
-  // 拖拽进行中：冻结所有胶囊的 hover 增宽（改名/移除按钮），否则拖动经过时
-  // 目标胶囊变宽→布局跳→hover 丢失→又变窄，形成闪烁循环。
   const [dragActive, setDragActive] = useState(false);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
   // Only teammates are sortable; the leader pill is rendered outside the sortable id list.
   const sortableIds = useMemo(
     () => assistants.filter((assistant) => assistant.role !== 'leader').map((assistant) => assistant.slot_id),
     [assistants]
+  );
+
+  const slotOptions = useMemo<ModelSlotOption[]>(
+    () =>
+      assistants.map((a) => ({
+        slot_id: a.slot_id,
+        name: a.assistant_name,
+        isLeader: a.role === 'leader',
+      })),
+    [assistants]
+  );
+
+  const fallbackMembers = useMemo(
+    () =>
+      assistants.map((a) => ({
+        slot_id: a.slot_id,
+        name: a.assistant_name,
+        role: a.role,
+        backend: a.assistant_backend,
+      })),
+    [assistants]
+  );
+
+  const handleSwitchModels = useCallback(
+    async (target: ModelTargetSpec, meta: ModelPickerSelectionMeta) => {
+      try {
+        const res =
+          meta.scope === 'slots' && meta.slotId
+            ? await switchModels({
+                scope: 'slots',
+                updates: [{ slot_id: meta.slotId, target }],
+                force_interrupt: meta.forceInterrupt,
+              })
+            : await switchModels({
+                scope: meta.scope === 'teammates_only' ? 'teammates_only' : 'all',
+                target,
+                force_interrupt: meta.forceInterrupt,
+              });
+        const outcomes = res?.outcomes ?? [];
+        const queuedCount = outcomes.filter((o) => o.status === 'queued_after_turn').length;
+        if (queuedCount > 0 && queuedCount === outcomes.length) {
+          Message.info(
+            t('team.modelHub.switchModelsQueued', {
+              count: queuedCount,
+              defaultValue: `Model swap queued after current turn (${queuedCount} member(s))`,
+            })
+          );
+        } else {
+          Message.success(
+            t('team.modelHub.switchModelsSuccess', {
+              count: outcomes.length || 1,
+              defaultValue: `Updated models for ${outcomes.length || 1} member(s)`,
+            })
+          );
+        }
+      } catch (err) {
+        Message.error(
+          t('team.modelHub.switchModelsFailed', {
+            error: String(err),
+            defaultValue: `Failed to switch models: ${String(err)}`,
+          })
+        );
+      }
+    },
+    [switchModels, t]
   );
 
   const updateTabOverflow = useCallback(() => {
@@ -341,6 +453,7 @@ const TeamTabs: React.FC<TeamTabsProps> = ({ onTabClick, pendingCounts, warmingU
                     warmupFailed={failedSlotIds?.has(assistant.slot_id) ?? false}
                     color={colorOf(assistant.slot_id)}
                     pendingCount={pendingCounts?.get(assistant.slot_id) ?? 0}
+                    slotContext={slotsBySlotId[assistant.slot_id]}
                     dragActive={dragActive}
                     onSwitch={(slot_id) => {
                       switchTab(slot_id);
@@ -367,22 +480,84 @@ const TeamTabs: React.FC<TeamTabsProps> = ({ onTabClick, pendingCounts, warmingU
           <div
             className='pointer-events-none absolute top-0 bottom-0 w-28px z-10'
             style={{
-              right: 'var(--team-add-w, 132px)',
+              right: 'var(--team-add-w, 280px)',
               background: 'linear-gradient(270deg, var(--color-bg-1), transparent)',
             }}
           />
         )}
-        {/* 固定在最右、不随列表滚动的「添加成员」；左侧一根分隔线与成员列表隔开，按钮本身无边框。 */}
-        {addAssistant ? (
-          <div className='flex items-center shrink-0 border-s border-solid border-[color:var(--border-base)] px-8px'>
+        {/* Right-pinned Team Hub Controls Cluster + Add Member */}
+        <div className='flex items-center gap-6px shrink-0 border-s border-solid border-[color:var(--border-base)] px-8px'>
+          {team_id && (
+            <>
+              <ConnectedModelPickerPopover
+                disabled={switchingModels}
+                showScopeSelector
+                showForceInterrupt
+                slotOptions={slotOptions}
+                panelTestId='team-tabs-switch-models-panel'
+                onSelectModel={handleSwitchModels}
+              >
+                <button
+                  type='button'
+                  data-testid='team-tabs-switch-models-btn'
+                  disabled={switchingModels}
+                  style={{
+                    appearance: 'none',
+                    WebkitAppearance: 'none',
+                    height: 30,
+                    lineHeight: 'normal',
+                  }}
+                  className='flex items-center gap-5px px-9px rounded-8px text-12px font-500 whitespace-nowrap bg-[color:var(--bg-2)] hover:bg-[color:var(--bg-3)] text-[color:var(--text-primary)] border border-solid border-[color:var(--border-base)] cursor-pointer transition-colors'
+                >
+                  <Exchange theme='outline' size='13' fill='currentColor' />
+                  <span>{t('team.modelHub.switchModelsBtn', { defaultValue: 'Switch Models' })}</span>
+                </button>
+              </ConnectedModelPickerPopover>
+
+              <TeamContextCompactPopover
+                slots={slots}
+                fallbackMembers={fallbackMembers}
+                autoCompactEnabled={autoCompactEnabled}
+                autoCompactThresholdPct={autoCompactThresholdPct}
+                compacting={compacting}
+                onToggleAutoCompact={toggleAutoCompact}
+                onCompactAll={() => compactTeam({ mode: 'auto' })}
+                onCompactSlot={(slotId) => compactTeam({ slot_id: slotId, mode: 'auto' })}
+              >
+                <button
+                  type='button'
+                  data-testid='team-tabs-compact-btn'
+                  style={{
+                    appearance: 'none',
+                    WebkitAppearance: 'none',
+                    height: 30,
+                    lineHeight: 'normal',
+                  }}
+                  className={classNames(
+                    'flex items-center gap-5px px-9px rounded-8px text-12px font-500 whitespace-nowrap border border-solid cursor-pointer transition-colors',
+                    slots.length > 0 && highestLevel === 'critical'
+                      ? 'bg-red-500/12 border-red-500/30 text-red-700 dark:text-red-300'
+                      : slots.length > 0 && highestLevel === 'warning'
+                        ? 'bg-amber-500/12 border-amber-500/30 text-amber-700 dark:text-amber-300'
+                        : 'bg-[color:var(--bg-2)] hover:bg-[color:var(--bg-3)] text-[color:var(--text-primary)] border-[color:var(--border-base)]'
+                  )}
+                >
+                  <Lightning theme='outline' size='13' fill='currentColor' />
+                  <span>{t('team.modelHub.compactBtn', { defaultValue: 'Compact Context' })}</span>
+                  {slots.length > 0 && (
+                    <span className='font-mono text-11px font-700 opacity-85'>{maxUsagePercent}%</span>
+                  )}
+                </button>
+              </TeamContextCompactPopover>
+            </>
+          )}
+
+          {addAssistant ? (
             <TeamAddMemberPopover disabled={memberOpsDisabled}>
               <button
                 type='button'
                 disabled={memberOpsDisabled}
                 data-testid='team-tab-add-member'
-                // 禁用态：只把文字调浅，位置/尺寸/背景/边框都不变。
-                // 原生 <button>:disabled 会叠加浏览器默认灰底 + 收缩高度，className 的 appearance/bg
-                // 在禁用态下可能被 UA 样式盖过；这里用内联 style 强制关掉原生外观并锁定盒模型，保证两态一致。
                 style={{
                   appearance: 'none',
                   WebkitAppearance: 'none',
@@ -401,8 +576,8 @@ const TeamTabs: React.FC<TeamTabsProps> = ({ onTabClick, pendingCounts, warmingU
                 {t('team.addMember.title', { defaultValue: 'Add member' })}
               </button>
             </TeamAddMemberPopover>
-          </div>
-        ) : null}
+          ) : null}
+        </div>
       </div>
     </div>
   );

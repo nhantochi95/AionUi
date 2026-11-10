@@ -1,10 +1,11 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Button, Input, Message, Switch } from '@arco-design/web-react';
 import type { RefInputType } from '@arco-design/web-react/es/Input/interface';
 import { Plus } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import { ipcBridge } from '@/common';
-import type { TTeam } from '@/common/types/team/teamTypes';
+import type { TeamAssistant, TTeam } from '@/common/types/team/teamTypes';
+import type { ModelTargetSpec, PerSlotModelUpdate } from '@/common/types/team/teamHubTypes';
 import type { TeamAssistantInput } from '@/common/adapter/teamMapper';
 import { useAuth } from '@renderer/hooks/context/AuthContext';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
@@ -17,6 +18,8 @@ import { resolveDefaultTeamAgentModel } from './teamCreateModelResolver';
 import TeamAssistantPicker from './memberPicker/TeamAssistantPicker';
 import TeamAssistantPickerDropdown from './memberPicker/TeamAssistantPickerDropdown';
 import TeamMemberDraftList, { type TeamMemberDraft } from './memberPicker/TeamMemberDraftList';
+import QuickCreateMemberInlineForm, { type QuickCreateMemberResult } from './modelHub/QuickCreateMemberInlineForm';
+import { getTeamHubBridge } from './modelHub/bridgeSafe';
 
 // [E2E SYNC] 修改此组件的 DOM 结构（class、标题、关闭按钮等）时，
 // 必须同步更新 tests/e2e/cases/teams/team-create.e2e.ts、team-whitelist.e2e.ts、
@@ -32,6 +35,48 @@ type Props = {
   onCreated: (team: TTeam) => void;
 };
 
+function buildInitialSlotModelUpdates(
+  draftMembers: TeamMemberDraft[],
+  leaderSelectionId: string | undefined,
+  createdSlots: TeamAssistant[]
+): PerSlotModelUpdate[] {
+  const usedSlotIds = new Set<string>();
+  const updates: PerSlotModelUpdate[] = [];
+
+  draftMembers.forEach((member, idx) => {
+    const expectedRole = member.selectionId === leaderSelectionId ? 'leader' : 'teammate';
+    let matchedSlot: TeamAssistant | undefined;
+
+    const positional = createdSlots[idx];
+    if (positional && !usedSlotIds.has(positional.slot_id) && positional.role === expectedRole) {
+      matchedSlot = positional;
+    }
+    if (!matchedSlot) {
+      matchedSlot = createdSlots.find(
+        (s) => !usedSlotIds.has(s.slot_id) && s.role === expectedRole && s.assistant_name === member.assistant.name
+      );
+    }
+    if (!matchedSlot) {
+      matchedSlot = createdSlots.find((s) => !usedSlotIds.has(s.slot_id) && s.role === expectedRole);
+    }
+    if (!matchedSlot) {
+      matchedSlot = createdSlots.find((s) => !usedSlotIds.has(s.slot_id));
+    }
+
+    if (matchedSlot) {
+      usedSlotIds.add(matchedSlot.slot_id);
+      if (member.modelOverride) {
+        updates.push({
+          slot_id: matchedSlot.slot_id,
+          target: member.modelOverride,
+        });
+      }
+    }
+  });
+
+  return updates;
+}
+
 const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
@@ -45,6 +90,7 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
   const [enableTelegramBridge, setEnableTelegramBridge] = useState(true);
   const [setTelegramDmDefault, setSetTelegramDmDefault] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [quickCreateOpen, setQuickCreateOpen] = useState(false);
   // 窄屏专用：助手选择器以下拉列表形式，锚在“添加成员”按钮上按需唤出。
   const [assistantDropdownOpen, setAssistantDropdownOpen] = useState(false);
   const nameInputRef = useRef<RefInputType | null>(null);
@@ -61,18 +107,59 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
     setWorkspace('');
     setEnableTelegramBridge(true);
     setSetTelegramDmDefault(false);
+    setQuickCreateOpen(false);
     setAssistantDropdownOpen(false);
     onClose();
   };
 
   const handleSelectAssistant = (assistant: TeamAssistantOption) => {
-    const draft = {
+    const draft: TeamMemberDraft = {
       selectionId: `${assistant.id}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       assistant,
     };
     setSelectedMembers((members) => [...members, draft]);
     setLeaderSelectionId((current) => current ?? draft.selectionId);
   };
+
+  const handleQuickMemberCreated = useCallback(({ response, target }: QuickCreateMemberResult) => {
+    const draft: TeamMemberDraft = {
+      selectionId: `${response.assistant_id}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      assistant: {
+        id: response.assistant_id,
+        name: response.assistant_name,
+        backend: response.backend,
+        team_selectable: true,
+      },
+      modelOverride: target,
+    };
+    setSelectedMembers((members) => [...members, draft]);
+    setLeaderSelectionId((current) => current ?? draft.selectionId);
+    setQuickCreateOpen(false);
+    setAssistantDropdownOpen(false);
+  }, []);
+
+  const handleChangeMemberModel = useCallback(
+    (selectionId: string, modelOverride: ModelTargetSpec | undefined) => {
+      setSelectedMembers((prev) =>
+        prev.map((member) => (member.selectionId === selectionId ? { ...member, modelOverride } : member))
+      );
+    },
+    []
+  );
+
+  const handleBulkSetModel = useCallback(
+    (target: ModelTargetSpec, scope: 'all' | 'teammates_only') => {
+      setSelectedMembers((prev) =>
+        prev.map((member) => {
+          if (scope === 'teammates_only' && member.selectionId === leaderSelectionId) {
+            return member;
+          }
+          return { ...member, modelOverride: target };
+        })
+      );
+    },
+    [leaderSelectionId]
+  );
 
   const handleRemoveDraft = (selectionId: string) => {
     const nextMembers = selectedMembers.filter((member) => member.selectionId !== selectionId);
@@ -102,6 +189,13 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
       const resolvedModels = await Promise.all(
         selectedMembers.map(async (member) => {
           try {
+            if (
+              member.modelOverride &&
+              member.modelOverride.backend === member.assistant.backend &&
+              member.modelOverride.model_id
+            ) {
+              return [member.selectionId, member.modelOverride.model_id] as const;
+            }
             const model = await resolveDefaultTeamAgentModel({
               assistant_id: member.assistant.id,
               assistant_backend: member.assistant.backend,
@@ -135,6 +229,18 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
       if (result.__bridgeError) {
         Message.error(getConversationCreateErrorMessage(result.message ?? t('team.create.error'), t));
         return;
+      }
+
+      // Apply per-member / bulk Connected Model overrides across CLI & API engines
+      const createdSlots = team.agents?.length ? team.agents : (team.assistants ?? []);
+      const modelUpdates = buildInitialSlotModelUpdates(selectedMembers, leaderSelectionId, createdSlots);
+      const hub = getTeamHubBridge();
+      if (modelUpdates.length > 0 && hub?.switchModels?.invoke) {
+        await hub.switchModels.invoke({
+          team_id: team.id,
+          scope: 'slots',
+          updates: modelUpdates,
+        });
       }
 
       try {
@@ -234,6 +340,17 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
     </div>
   );
 
+  const quickCreateToggleSection = (
+    <>
+      {quickCreateOpen && (
+        <QuickCreateMemberInlineForm
+          onCreated={handleQuickMemberCreated}
+          onCancel={() => setQuickCreateOpen(false)}
+        />
+      )}
+    </>
+  );
+
   // 桌面端：左右双栏，通栏竖分隔线（保持原样，宽屏不受窄屏改动影响）。
   const desktopBody = (
     <div
@@ -245,12 +362,24 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
         className='flex min-h-0 flex-col border-e border-border-3 px-20px pb-18px pt-12px'
         data-testid='team-create-assistant-pane'
       >
-        <div className='mb-12px text-15px font-600 leading-22px text-t-secondary'>
-          {t('team.create.allAssistantsWithCount', {
-            count: allAssistants.length,
-            defaultValue: `All assistants (${allAssistants.length})`,
-          })}
+        <div className='mb-10px flex items-center justify-between gap-8px'>
+          <div className='text-15px font-600 leading-22px text-t-secondary'>
+            {t('team.create.allAssistantsWithCount', {
+              count: allAssistants.length,
+              defaultValue: `All assistants (${allAssistants.length})`,
+            })}
+          </div>
+          <Button
+            type='outline'
+            size='mini'
+            data-testid='team-create-quick-member-btn'
+            onClick={() => setQuickCreateOpen((v) => !v)}
+            className='!rounded-999px !px-10px !text-12px'
+          >
+            {t('team.modelHub.quickCreateBtn', { defaultValue: '+ Quick Create Member' })}
+          </Button>
         </div>
+        {quickCreateToggleSection}
         {assistantPicker}
       </section>
 
@@ -260,6 +389,8 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
           leaderSelectionId={leaderSelectionId}
           onLeaderChange={setLeaderSelectionId}
           onRemove={handleRemoveDraft}
+          onChangeMemberModel={handleChangeMemberModel}
+          onBulkSetModel={handleBulkSetModel}
         />
         <div className='mt-14px shrink-0 border-t border-border-2 pt-14px'>{teamFields}</div>
       </section>
@@ -273,36 +404,50 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
     setAssistantDropdownOpen(false);
   };
   const addMemberDropdown = (
-    <TeamAssistantPickerDropdown
-      assistants={allAssistants}
-      onSelect={handleSelectFromDropdown}
-      visible={assistantDropdownOpen}
-      onVisibleChange={setAssistantDropdownOpen}
-      testIdPrefix='team-create-agent'
-      panelTestId='team-create-assistant-pane'
-      emptyText={t('team.create.noSupportedAgents', { defaultValue: 'No supported assistants available' })}
-    >
+    <div className='flex items-center gap-6px'>
       <Button
         type='outline'
         size='small'
-        icon={<Plus theme='outline' size='14' fill='currentColor' />}
-        data-testid='team-create-add-member-btn'
-        className='!h-30px !rounded-999px !px-12px !text-13px'
+        data-testid='team-create-quick-member-btn'
+        onClick={() => setQuickCreateOpen((v) => !v)}
+        className='!h-30px !rounded-999px !px-10px !text-12px'
       >
-        {t('team.addMember.title', { defaultValue: 'Add member' })}
+        {t('team.modelHub.quickCreateBtn', { defaultValue: '+ Quick Create Member' })}
       </Button>
-    </TeamAssistantPickerDropdown>
+      <TeamAssistantPickerDropdown
+        assistants={allAssistants}
+        onSelect={handleSelectFromDropdown}
+        visible={assistantDropdownOpen}
+        onVisibleChange={setAssistantDropdownOpen}
+        testIdPrefix='team-create-agent'
+        panelTestId='team-create-assistant-pane'
+        emptyText={t('team.create.noSupportedAgents', { defaultValue: 'No supported assistants available' })}
+      >
+        <Button
+          type='outline'
+          size='small'
+          icon={<Plus theme='outline' size='14' fill='currentColor' />}
+          data-testid='team-create-add-member-btn'
+          className='!h-30px !rounded-999px !px-12px !text-13px'
+        >
+          {t('team.addMember.title', { defaultValue: 'Add member' })}
+        </Button>
+      </TeamAssistantPickerDropdown>
+    </div>
   );
   const mobileBody = (
     <div data-testid='team-create-layout-mobile' className='flex min-h-0 flex-col gap-16px px-20px py-16px'>
       {/* 窄屏无固定高度的父级：给成员列表框一个固定 max-height（同桌面思路），成员变多时框内滚动，
           团队字段区始终留在下方可见。 */}
       <section className='flex min-h-0 flex-col' data-testid='team-create-details-pane'>
+        {quickCreateToggleSection}
         <TeamMemberDraftList
           members={selectedMembers}
           leaderSelectionId={leaderSelectionId}
           onLeaderChange={setLeaderSelectionId}
           onRemove={handleRemoveDraft}
+          onChangeMemberModel={handleChangeMemberModel}
+          onBulkSetModel={handleBulkSetModel}
           headerAction={addMemberDropdown}
           listBoxClassName='!max-h-[38vh]'
         />

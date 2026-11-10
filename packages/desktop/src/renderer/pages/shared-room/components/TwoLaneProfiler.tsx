@@ -1,15 +1,27 @@
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Progress, Tag } from '@arco-design/web-react';
-import { Lightning, Tool } from '@icon-park/react';
+import { Button, Message, Progress, Switch, Tag } from '@arco-design/web-react';
+import { Exchange, Lightning, Tool } from '@icon-park/react';
+import classNames from 'classnames';
 import useSWR from 'swr';
 import { wallets } from '@/common/adapter/ipcBridge';
+import type { ModelTargetSpec, TeamContextStatusResponse } from '@/common/types/team/teamHubTypes';
+import ConnectedModelPickerPopover, {
+  type ModelPickerSelectionMeta,
+} from '@/renderer/pages/team/components/modelHub/ConnectedModelPickerPopover';
+import {
+  resolveSlotContextLevel,
+  useTeamContextAndModels,
+} from '@/renderer/pages/team/components/modelHub/useTeamContextAndModels';
 
 export interface TwoLaneProfilerProps {
   modelTimeSec?: number;
   toolTimeSec?: number;
   totalTimeSec?: number;
   showWalletCards?: boolean;
+  teamId?: string;
+  roomTeams?: Array<{ team_id: string; team_name: string }>;
+  initialContextStatus?: TeamContextStatusResponse;
 }
 
 export const TwoLaneProfiler: React.FC<TwoLaneProfilerProps> = ({
@@ -17,8 +29,35 @@ export const TwoLaneProfiler: React.FC<TwoLaneProfilerProps> = ({
   toolTimeSec = 22.2,
   totalTimeSec = 48.2,
   showWalletCards = true,
+  teamId,
+  roomTeams,
+  initialContextStatus,
 }) => {
   const { t } = useTranslation();
+
+  const [selectedTeamId, setSelectedTeamId] = useState<string | undefined>(
+    teamId ?? roomTeams?.[0]?.team_id ?? initialContextStatus?.team_id
+  );
+
+  useEffect(() => {
+    if (teamId) {
+      setSelectedTeamId(teamId);
+    }
+  }, [teamId]);
+
+  const effectiveTeamId = selectedTeamId ?? teamId ?? initialContextStatus?.team_id;
+  const showContextSection = Boolean(effectiveTeamId || initialContextStatus);
+
+  const {
+    slots,
+    autoCompactEnabled,
+    autoCompactThresholdPct,
+    compacting,
+    switchingModels,
+    compactTeam,
+    toggleAutoCompact,
+    switchModels,
+  } = useTeamContextAndModels(effectiveTeamId, initialContextStatus);
 
   const { data: walletData, mutate: mutateWallet } = useSWR(
     '/api/wallets/summary',
@@ -34,6 +73,77 @@ export const TwoLaneProfiler: React.FC<TwoLaneProfilerProps> = ({
       unsub?.();
     };
   }, [mutateWallet]);
+
+  const handleBulkSwitchModels = useCallback(
+    async (target: ModelTargetSpec, meta: ModelPickerSelectionMeta) => {
+      try {
+        const res =
+          meta.scope === 'slots' && meta.slotId
+            ? await switchModels({
+                scope: 'slots',
+                updates: [{ slot_id: meta.slotId, target }],
+                force_interrupt: meta.forceInterrupt,
+              })
+            : await switchModels({
+                scope: meta.scope === 'teammates_only' ? 'teammates_only' : 'all',
+                target,
+                force_interrupt: meta.forceInterrupt,
+              });
+        const count = res?.outcomes?.length ?? 1;
+        Message.success(
+          t('team.modelHub.switchModelsSuccess', 'Updated models for {{count}} member(s)', { count })
+        );
+      } catch (err) {
+        Message.error(
+          t('team.modelHub.switchModelsFailed', 'Failed to switch models: {{error}}', {
+            error: String(err),
+          })
+        );
+      }
+    },
+    [switchModels, t]
+  );
+
+  const handleSlotSwitchModel = useCallback(
+    async (slotId: string, target: ModelTargetSpec, meta: ModelPickerSelectionMeta) => {
+      try {
+        await switchModels({
+          scope: 'slots',
+          updates: [{ slot_id: slotId, target }],
+          force_interrupt: meta.forceInterrupt,
+        });
+        Message.success(
+          t('team.modelHub.switchModelsSuccess', 'Updated models for {{count}} member(s)', { count: 1 })
+        );
+      } catch (err) {
+        Message.error(
+          t('team.modelHub.switchModelsFailed', 'Failed to switch models: {{error}}', {
+            error: String(err),
+          })
+        );
+      }
+    },
+    [switchModels, t]
+  );
+
+  const handleCompactSlot = useCallback(
+    async (slotId?: string) => {
+      try {
+        const res = await compactTeam(slotId ? { slot_id: slotId, mode: 'auto' } : { mode: 'auto' });
+        const count = res?.outcomes?.length ?? 1;
+        Message.success(
+          t('team.modelHub.compactSuccess', 'Compacted context for {{count}} member(s)', { count })
+        );
+      } catch (err) {
+        Message.error(
+          t('team.modelHub.compactFailed', 'Failed to compact context: {{error}}', {
+            error: String(err),
+          })
+        );
+      }
+    },
+    [compactTeam, t]
+  );
 
   const apiSpent = walletData?.api_key_spent_usd ?? 1.4;
   const apiLimit = walletData?.api_key_budget_limit_usd ?? 5.0;
@@ -145,6 +255,204 @@ export const TwoLaneProfiler: React.FC<TwoLaneProfilerProps> = ({
               />
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Context Window Health & Connected Models Section */}
+      {showContextSection && (
+        <div
+          data-testid='profiler-context-health'
+          className='flex flex-col gap-10px p-12px rd-10px bg-fill-2 border border-solid border-arco-2'
+        >
+          <div className='flex flex-wrap items-center justify-between gap-8px'>
+            <span className='font-bold text-t-primary'>
+              {t('team.modelHub.contextHealthTitle', 'Context Window Health')}
+            </span>
+            <div className='flex items-center gap-8px flex-wrap'>
+              <label className='inline-flex items-center gap-5px text-11px text-t-secondary cursor-pointer select-none'>
+                <Switch
+                  size='small'
+                  data-testid='profiler-auto-compact-switch'
+                  checked={autoCompactEnabled}
+                  onChange={(val) => void toggleAutoCompact(val)}
+                />
+                <span>
+                  {t('team.modelHub.autoCompactLabel', 'Auto-Compact at {{threshold}}%', {
+                    threshold: autoCompactThresholdPct,
+                  })}
+                </span>
+              </label>
+
+              <Button
+                size='mini'
+                type='secondary'
+                data-testid='profiler-compact-all-btn'
+                loading={compacting}
+                onClick={() => void handleCompactSlot(undefined)}
+              >
+                {t('team.modelHub.compactBtn', 'Compact Context')}
+              </Button>
+
+              <ConnectedModelPickerPopover
+                disabled={switchingModels}
+                showScopeSelector
+                showForceInterrupt
+                teamOptions={roomTeams}
+                selectedTeamId={effectiveTeamId}
+                onSelectTeamId={setSelectedTeamId}
+                panelTestId='profiler-switch-models-panel'
+                onSelectModel={handleBulkSwitchModels}
+              >
+                <Button
+                  size='mini'
+                  type='outline'
+                  data-testid='profiler-switch-models-btn'
+                  loading={switchingModels}
+                  icon={<Exchange theme='outline' size='12' fill='currentColor' />}
+                >
+                  {t('team.modelHub.switchModelsBtn', 'Switch Models')}
+                </Button>
+              </ConnectedModelPickerPopover>
+            </div>
+          </div>
+
+          {roomTeams && roomTeams.length > 1 && (
+            <div className='flex items-center gap-4px flex-wrap'>
+              {roomTeams.map((tm) => (
+                <button
+                  key={tm.team_id}
+                  type='button'
+                  data-testid={`profiler-team-pill-${tm.team_id}`}
+                  onClick={() => setSelectedTeamId(tm.team_id)}
+                  className={classNames(
+                    'px-8px py-2px rd-999px text-11px border-0 cursor-pointer transition-colors',
+                    effectiveTeamId === tm.team_id
+                      ? 'bg-[#165DFF] text-white font-600'
+                      : 'bg-fill-3 text-t-secondary hover:text-t-primary'
+                  )}
+                >
+                  {tm.team_name}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {slots.length === 0 ? (
+            <div className='py-8px text-11px text-t-tertiary'>
+              {t('team.modelHub.noSlotsContext', 'Context usage appears once team members are active')}
+            </div>
+          ) : (
+            <div className='flex flex-col gap-8px'>
+              {slots.map((slot) => {
+                const pct = Math.max(0, Math.min(100, Math.round(slot.usage_percent)));
+                const level = resolveSlotContextLevel(pct, slot.level);
+                const isLeader = slot.role === 'leader' || slot.role === 'lead';
+                return (
+                  <div
+                    key={slot.slot_id}
+                    data-testid={`profiler-slot-card-${slot.slot_id}`}
+                    className='p-10px rd-8px bg-bg-1 border border-solid border-arco-2 flex flex-col gap-6px'
+                  >
+                    <div className='flex items-center justify-between gap-6px'>
+                      <div className='flex items-center gap-6px min-w-0 flex-1'>
+                        <span className='font-600 text-12px text-t-primary truncate'>
+                          {isLeader ? '👑 ' : ''}
+                          {slot.name}
+                        </span>
+                        <span
+                          data-testid={`profiler-slot-wallet-${slot.slot_id}`}
+                          className={classNames(
+                            'px-5px py-0.5px rd-999px text-10px font-600 shrink-0',
+                            slot.wallet_type === 'cli_subscription'
+                              ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                              : 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+                          )}
+                        >
+                          {slot.wallet_type === 'cli_subscription'
+                            ? t('team.modelHub.cliBadge', '$0 CLI')
+                            : t('team.modelHub.apiBadge', 'API')}
+                        </span>
+                      </div>
+
+                      <div className='flex items-center gap-6px shrink-0'>
+                        <span
+                          data-testid={`profiler-slot-pct-${slot.slot_id}`}
+                          data-context-level={level}
+                          className={classNames(
+                            'px-6px py-1px rd-999px text-10px font-mono font-700',
+                            level === 'critical'
+                              ? 'bg-red-500/15 text-red-700 dark:text-red-300'
+                              : level === 'warning'
+                                ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+                                : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                          )}
+                        >
+                          {pct}%
+                        </span>
+
+                        <Button
+                          size='mini'
+                          type='secondary'
+                          data-testid={`profiler-slot-compact-${slot.slot_id}`}
+                          loading={compacting}
+                          onClick={() => void handleCompactSlot(slot.slot_id)}
+                        >
+                          {t('team.modelHub.compactShortBtn', 'Compact')}
+                        </Button>
+
+                        <ConnectedModelPickerPopover
+                          showForceInterrupt
+                          panelTestId={`profiler-slot-switch-panel-${slot.slot_id}`}
+                          onSelectModel={(target, meta) => handleSlotSwitchModel(slot.slot_id, target, meta)}
+                        >
+                          <Button
+                            size='mini'
+                            type='outline'
+                            data-testid={`profiler-slot-switch-${slot.slot_id}`}
+                            disabled={switchingModels}
+                          >
+                            {t('team.modelHub.switchModelsBtn', 'Switch Models')}
+                          </Button>
+                        </ConnectedModelPickerPopover>
+                      </div>
+                    </div>
+
+                    <Progress
+                      percent={pct}
+                      size='small'
+                      showText={false}
+                      status={level === 'critical' ? 'error' : level === 'warning' ? 'warning' : 'normal'}
+                    />
+
+                    <div className='flex items-center justify-between gap-8px text-10px text-t-tertiary font-mono flex-wrap'>
+                      <span data-testid={`profiler-slot-model-${slot.slot_id}`} className='truncate'>
+                        {slot.backend} / {slot.model_id || 'default'}
+                      </span>
+                      <div className='flex items-center gap-8px shrink-0'>
+                        <span data-testid={`profiler-slot-compactions-${slot.slot_id}`}>
+                          {t('team.modelHub.compactedCount', 'Compacted ×{{count}}', {
+                            count: slot.compaction_count,
+                          })}
+                        </span>
+                        {slot.has_anchored_summary && (
+                          <span className='text-[#165DFF]'>
+                            {t('team.modelHub.anchoredBadge', 'Anchored')}
+                          </span>
+                        )}
+                        {slot.pending_model_swap && (
+                          <span className='text-amber-600 dark:text-amber-400'>
+                            {t('team.modelHub.pendingSwapBadge', 'Pending swap → {{model}}', {
+                              model: `${slot.pending_model_swap.backend}/${slot.pending_model_swap.model_id}`,
+                            })}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -17,6 +17,8 @@ export interface HoistedPreviewPanelProps {
   roomName?: string;
   goalAncestry?: string[];
   onMergeSuccess?: () => void;
+  teamId?: string;
+  roomTeams?: Array<{ team_id: string; team_name: string }>;
 }
 
 export const HoistedPreviewPanel: React.FC<HoistedPreviewPanelProps> = ({
@@ -28,6 +30,8 @@ export const HoistedPreviewPanel: React.FC<HoistedPreviewPanelProps> = ({
   roomName = 'auth-fix',
   goalAncestry = ['Release v2.4', 'Auth Fix', 'Refresh Token'],
   onMergeSuccess,
+  teamId,
+  roomTeams,
 }) => {
   const { t } = useTranslation();
   const [activeSubtab, setActiveSubtab] = useState<PreviewSubtab>('diff');
@@ -132,6 +136,8 @@ export const HoistedPreviewPanel: React.FC<HoistedPreviewPanelProps> = ({
             toolTimeSec={22.2}
             totalTimeSec={48.2}
             showWalletCards={true}
+            teamId={teamId}
+            roomTeams={roomTeams}
           />
         )}
 

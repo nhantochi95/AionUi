@@ -19,6 +19,7 @@ import TeamChatEmptyState from './TeamChatEmptyState';
 import { useTeamTabs } from '@/renderer/pages/team/hooks/TeamTabsContext';
 import { usePresetAssistantInfo } from '@/renderer/hooks/agent/usePresetAssistantInfo';
 import { resolveConversationBackend } from '@/renderer/pages/conversation/utils/conversationAssistantIdentity';
+import { getTeamHubBridge } from './modelHub/bridgeSafe';
 
 const AcpChat = React.lazy(() => import('@/renderer/pages/conversation/platforms/acp/AcpChat'));
 const AionrsChat = React.lazy(() => import('@/renderer/pages/conversation/platforms/aionrs/AionrsChat'));
@@ -57,6 +58,8 @@ const resolveAssistantDisplayName = (
 /** Aionrs sub-component manages model selection state without adding a ChatLayout wrapper */
 const AionrsTeamChat: React.FC<{
   conversation: AionrsConversation;
+  team_id?: string;
+  slot_id?: string;
   emptySlot?: React.ReactNode;
   assistant_name?: string;
   teamSendMessage?: TeamSendOverride;
@@ -66,6 +69,8 @@ const AionrsTeamChat: React.FC<{
   loadedMcpStatuses?: IConversationMcpStatus[];
 }> = ({
   conversation,
+  team_id,
+  slot_id,
   emptySlot,
   assistant_name,
   teamSendMessage,
@@ -78,9 +83,26 @@ const AionrsTeamChat: React.FC<{
     async (_provider: IProvider, modelName: string) => {
       const selected = { ..._provider, use_model: modelName } as TProviderWithModel;
       const ok = await ipcBridge.conversation.update.invoke({ id: conversation.id, updates: { model: selected } });
+      const hub = getTeamHubBridge();
+      if (ok && team_id && slot_id && hub?.switchModels?.invoke) {
+        await hub.switchModels.invoke({
+          team_id,
+          scope: 'slots',
+          updates: [
+            {
+              slot_id,
+              target: {
+                backend: 'aionrs',
+                provider_id: _provider.id,
+                model_id: modelName,
+              },
+            },
+          ],
+        });
+      }
       return Boolean(ok);
     },
-    [conversation.id]
+    [conversation.id, slot_id, team_id]
   );
 
   const modelSelection = useAionrsModelSelection({ initialModel: conversation.model, onSelectModel });
@@ -278,6 +300,8 @@ const TeamChatView: React.FC<TeamChatViewProps> = ({
           <AionrsTeamChat
             key={conversation.id}
             conversation={conversation as AionrsConversation}
+            team_id={team_id}
+            slot_id={slot_id}
             emptySlot={emptySlot}
             assistant_name={resolvedAssistantName}
             teamSendMessage={teamSendMessageOverride}

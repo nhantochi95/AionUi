@@ -46,6 +46,7 @@ import { setCurrentProject } from '@/renderer/pages/conversation/explorer/curren
 import { setCurrentConversation } from '@/renderer/pages/conversation/explorer/currentConversationStore';
 import { getSnapshotConversationProjectId } from '@/renderer/pages/conversation/GroupedHistory/hooks/useConversationListSync';
 import { isBackendHttpError } from '@/common/adapter/httpBridge';
+import { getTeamHubBridge } from './components/modelHub/bridgeSafe';
 
 type Props = {
   team: TTeam;
@@ -75,19 +76,38 @@ const configErrorMessageKey = (error: unknown) => {
 };
 
 /** Compact aionrs model selector for the agent header */
-const AionrsHeaderModelSelector: React.FC<{ conversation_id: string; initialModel?: TProviderWithModel }> = ({
-  conversation_id,
-  initialModel,
-}) => {
+const AionrsHeaderModelSelector: React.FC<{
+  conversation_id: string;
+  team_id?: string;
+  slot_id?: string;
+  initialModel?: TProviderWithModel;
+}> = ({ conversation_id, team_id, slot_id, initialModel }) => {
   const { t } = useTranslation();
   const teamPermission = useTeamPermission();
   const onSelectModel = useCallback(
     async (_provider: IProvider, modelName: string) => {
       const selected = { ..._provider, use_model: modelName } as TProviderWithModel;
       const ok = await ipcBridge.conversation.update.invoke({ id: conversation_id, updates: { model: selected } });
+      const hub = getTeamHubBridge();
+      if (ok && team_id && slot_id && hub?.switchModels?.invoke) {
+        await hub.switchModels.invoke({
+          team_id,
+          scope: 'slots',
+          updates: [
+            {
+              slot_id,
+              target: {
+                backend: 'aionrs',
+                provider_id: _provider.id,
+                model_id: modelName,
+              },
+            },
+          ],
+        });
+      }
       return Boolean(ok);
     },
-    [conversation_id]
+    [conversation_id, slot_id, team_id]
   );
   const modelSelection = useAionrsModelSelection({ initialModel, onSelectModel });
   const runtimeConfig = useAcpConfigOptions({
@@ -399,6 +419,25 @@ const AssistantChatSlot: React.FC<{
     () => getConversationOrNull(assistant.conversation_id)
   );
 
+  useEffect(() => {
+    const hub = getTeamHubBridge();
+    if (!hub || !team_id) return;
+    const unsubSwitched = hub.modelsSwitched?.on((ev) => {
+      if (ev.team_id === team_id) {
+        void mutateConversation();
+      }
+    });
+    const unsubCompacted = hub.contextCompacted?.on((ev) => {
+      if (ev.team_id === team_id) {
+        void mutateConversation();
+      }
+    });
+    return () => {
+      unsubSwitched?.();
+      unsubCompacted?.();
+    };
+  }, [mutateConversation, team_id]);
+
   const isAionrs = conversation?.type === 'aionrs';
   const initialModelId = (conversation?.extra as { current_model_id?: string })?.current_model_id;
   const isAcpLike = conversation?.type === 'acp' || isAcpLikeBackend(assistant.assistant_backend);
@@ -492,6 +531,8 @@ const AssistantChatSlot: React.FC<{
               <AionrsHeaderModelSelector
                 key={assistant.conversation_id}
                 conversation_id={assistant.conversation_id}
+                team_id={team_id}
+                slot_id={assistant.slot_id}
                 initialModel={conversation?.model as TProviderWithModel | undefined}
               />
             </div>

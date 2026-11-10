@@ -18,7 +18,7 @@ import {
   Tag,
   Tooltip,
 } from '@arco-design/web-react';
-import { Communication, Delete, EditOne, Inbox, Peoples, Plus } from '@icon-park/react';
+import { Communication, Delete, EditOne, Exchange, Inbox, Lightning, Peoples, Plus } from '@icon-park/react';
 import classNames from 'classnames';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -32,6 +32,7 @@ import type {
   IStagedRoomArtifact,
   SharedRoomTaskStatus,
 } from '@/common/types/sharedRoom';
+import type { ModelTargetSpec } from '@/common/types/team/teamHubTypes';
 import SharedRoomFormModal from './SharedRoomFormModal';
 import { useSharedRoomList } from './hooks/useSharedRoomList';
 import { useCompositionInput } from '@renderer/hooks/chat/useCompositionInput';
@@ -40,6 +41,11 @@ import type { KanbanColumnKey } from './components/kanban/kanbanTypes';
 import { RoundedPillComposer } from './components/RoundedPillComposer';
 import { HoistedPreviewPanel } from './components/HoistedPreviewPanel';
 import { TwoLaneProfiler } from './components/TwoLaneProfiler';
+import ConnectedModelPickerPopover, {
+  type ModelPickerSelectionMeta,
+} from '@/renderer/pages/team/components/modelHub/ConnectedModelPickerPopover';
+import TeamContextCompactPopover from '@/renderer/pages/team/components/modelHub/TeamContextCompactPopover';
+import { useTeamContextAndModels } from '@/renderer/pages/team/components/modelHub/useTeamContextAndModels';
 import ReactMarkdown from 'react-markdown';
 import CodeBlock from '@renderer/components/Markdown/CodeBlock';
 import {
@@ -166,6 +172,29 @@ const SharedRoomPage: React.FC = () => {
   const [viewTab, setViewTab] = useState<SharedRoomViewTab>('chat');
   const [selectedTaskId, setSelectedTaskId] = useState<string | undefined>();
   const [editModalOpen, setEditModalOpen] = useState(false);
+  const [selectedHubTeamId, setSelectedHubTeamId] = useState<string | undefined>();
+
+  const defaultHubTeamId = useMemo(
+    () => room?.members.find((m) => m.is_host)?.team_id ?? room?.members[0]?.team_id,
+    [room?.members]
+  );
+  const activeHubTeamId =
+    selectedHubTeamId && room?.members.some((m) => m.team_id === selectedHubTeamId)
+      ? selectedHubTeamId
+      : defaultHubTeamId;
+
+  const {
+    slots: hubSlots,
+    autoCompactEnabled: hubAutoCompactEnabled,
+    autoCompactThresholdPct: hubAutoCompactThresholdPct,
+    maxUsagePercent: hubMaxUsagePercent,
+    highestLevel: hubHighestLevel,
+    compacting: hubCompacting,
+    switchingModels: hubSwitchingModels,
+    compactTeam: hubCompactTeam,
+    toggleAutoCompact: hubToggleAutoCompact,
+    switchModels: hubSwitchModels,
+  } = useTeamContextAndModels(activeHubTeamId);
 
   // Telegram room binding popover state
   const [tgPopoverOpen, setTgPopoverOpen] = useState(false);
@@ -193,7 +222,48 @@ const SharedRoomPage: React.FC = () => {
     setTgPopoverOpen(false);
     setEditModalOpen(false);
     setTaskModalOpen(false);
+    setSelectedHubTeamId(undefined);
   }, [roomId]);
+
+  const handleRoomQuickCompact = useCallback(async () => {
+    try {
+      const res = await hubCompactTeam({ mode: 'auto' });
+      const count = res?.outcomes?.length ?? 1;
+      Message.success(t('team.modelHub.compactSuccess', 'Compacted context for {{count}} member(s)', { count }));
+    } catch (err) {
+      Message.error(
+        t('team.modelHub.compactFailed', 'Failed to compact context: {{error}}', { error: String(err) })
+      );
+    }
+  }, [hubCompactTeam, t]);
+
+  const handleRoomSwitchModels = useCallback(
+    async (target: ModelTargetSpec, meta: ModelPickerSelectionMeta) => {
+      try {
+        const res =
+          meta.scope === 'slots' && meta.slotId
+            ? await hubSwitchModels({
+                scope: 'slots',
+                updates: [{ slot_id: meta.slotId, target }],
+                force_interrupt: meta.forceInterrupt,
+              })
+            : await hubSwitchModels({
+                scope: meta.scope === 'teammates_only' ? 'teammates_only' : 'all',
+                target,
+                force_interrupt: meta.forceInterrupt,
+              });
+        const count = res?.outcomes?.length ?? 1;
+        Message.success(
+          t('team.modelHub.switchModelsSuccess', 'Updated models for {{count}} member(s)', { count })
+        );
+      } catch (err) {
+        Message.error(
+          t('team.modelHub.switchModelsFailed', 'Failed to switch models: {{error}}', { error: String(err) })
+        );
+      }
+    },
+    [hubSwitchModels, t]
+  );
 
   useEffect(() => {
     if (!room) return;
@@ -725,7 +795,78 @@ const SharedRoomPage: React.FC = () => {
         </div>
 
         {/* Header Actions */}
-        <div className='flex items-center gap-8px shrink-0'>
+        <div className='flex items-center gap-8px shrink-0 flex-wrap'>
+          {activeHubTeamId && (
+            <div className='inline-flex items-center gap-6px'>
+              <TeamContextCompactPopover
+                slots={hubSlots}
+                autoCompactEnabled={hubAutoCompactEnabled}
+                autoCompactThresholdPct={hubAutoCompactThresholdPct}
+                compacting={hubCompacting}
+                onToggleAutoCompact={hubToggleAutoCompact}
+                onCompactAll={() => hubCompactTeam({ mode: 'auto' })}
+                onCompactSlot={(slotId) => hubCompactTeam({ slot_id: slotId, mode: 'auto' })}
+              >
+                <button
+                  type='button'
+                  data-testid='shared-room-context-pill'
+                  data-context-level={hubHighestLevel}
+                  className={classNames(
+                    'h-28px px-9px rd-8px inline-flex items-center gap-5px text-11px font-600 border border-solid cursor-pointer transition-colors',
+                    hubSlots.length > 0 && hubHighestLevel === 'critical'
+                      ? 'bg-red-500/12 border-red-500/30 text-red-700 dark:text-red-300'
+                      : hubSlots.length > 0 && hubHighestLevel === 'warning'
+                        ? 'bg-amber-500/12 border-amber-500/30 text-amber-700 dark:text-amber-300'
+                        : 'bg-fill-2 hover:bg-fill-3 border-arco-2 text-t-primary'
+                  )}
+                >
+                  <span className='font-mono'>
+                    {t('team.modelHub.contextSummaryLabel', 'Context {{pct}}%', { pct: hubMaxUsagePercent })}
+                  </span>
+                  {hubAutoCompactEnabled && (
+                    <span className='px-4px py-0.5px rd-4px bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-10px'>
+                      {t('team.modelHub.autoCompactShort', 'Auto {{threshold}}%', {
+                        threshold: hubAutoCompactThresholdPct,
+                      })}
+                    </span>
+                  )}
+                </button>
+              </TeamContextCompactPopover>
+
+              <button
+                type='button'
+                data-testid='shared-room-compact-btn'
+                disabled={hubCompacting}
+                onClick={() => void handleRoomQuickCompact()}
+                className='h-28px px-10px rd-8px inline-flex items-center gap-5px text-12px font-500 bg-fill-2 hover:bg-fill-3 border border-solid border-arco-2 cursor-pointer text-t-primary disabled:opacity-50'
+              >
+                <Lightning theme='outline' size='13' fill='currentColor' />
+                <span>{t('team.modelHub.compactBtn', 'Compact Context')}</span>
+              </button>
+
+              <ConnectedModelPickerPopover
+                disabled={hubSwitchingModels}
+                showScopeSelector
+                showForceInterrupt
+                teamOptions={room.members}
+                selectedTeamId={activeHubTeamId}
+                onSelectTeamId={setSelectedHubTeamId}
+                panelTestId='shared-room-switch-models-panel'
+                onSelectModel={handleRoomSwitchModels}
+              >
+                <button
+                  type='button'
+                  data-testid='shared-room-switch-models-btn'
+                  disabled={hubSwitchingModels}
+                  className='h-28px px-10px rd-8px inline-flex items-center gap-5px text-12px font-500 bg-fill-2 hover:bg-fill-3 border border-solid border-arco-2 cursor-pointer text-t-primary disabled:opacity-50'
+                >
+                  <Exchange theme='outline' size='13' fill='currentColor' />
+                  <span>{t('team.modelHub.switchTeamModelsBtn', 'Switch Team Models')}</span>
+                </button>
+              </ConnectedModelPickerPopover>
+            </div>
+          )}
+
           <Popover
             trigger='click'
             position='br'
@@ -1058,6 +1199,8 @@ const SharedRoomPage: React.FC = () => {
               toolTimeSec={22.2}
               totalTimeSec={48.2}
               showWalletCards={true}
+              teamId={activeHubTeamId}
+              roomTeams={room.members}
             />
           </div>
         )}
@@ -1072,6 +1215,8 @@ const SharedRoomPage: React.FC = () => {
           roomName={room.name}
           goalAncestry={['Release v2.4', room.name, tasks.find((t) => t.id === selectedTaskId)?.title ?? 'Main Stream']}
           onMergeSuccess={mutateTasks}
+          teamId={activeHubTeamId}
+          roomTeams={room.members}
         />
       </div>
 

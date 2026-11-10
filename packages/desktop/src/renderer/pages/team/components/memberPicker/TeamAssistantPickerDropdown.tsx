@@ -30,6 +30,8 @@ type Props = {
   title?: React.ReactNode;
   /** 标题下的副标题（如“同一助手可被反复添加”）。仅在有 title 时渲染。 */
   subtitle?: React.ReactNode;
+  /** 标题下方、搜索列表上方的自定义扩展槽（例如 + 快速新建成员）。 */
+  topSlot?: React.ReactNode;
   /** 列表底部的辅助说明（如“同一助手可重复添加”）。 */
   footer?: React.ReactNode;
   /** 列表下方常驻的引导区（带上分隔线），如「找 Leader 拉人」。 */
@@ -52,6 +54,7 @@ const TeamAssistantPickerDropdown: React.FC<Props> = ({
   panelTestId,
   title,
   subtitle,
+  topSlot,
   footer,
   guidanceFooter,
   emptyText,
@@ -71,7 +74,7 @@ const TeamAssistantPickerDropdown: React.FC<Props> = ({
       popup={() => (
         <div
           data-testid={panelTestId}
-          className='flex max-h-[min(360px,60vh)] w-260px min-h-0 flex-col rounded-10px border border-solid border-3 bg-dialog-fill-0 p-8px shadow-[0_4px_12px_rgba(0,0,0,0.1)]'
+          className={`flex ${topSlot ? 'max-h-[min(520px,80vh)] w-300px' : 'max-h-[min(360px,60vh)] w-260px'} min-h-0 flex-col rounded-10px border border-solid border-3 bg-dialog-fill-0 p-8px shadow-[0_4px_12px_rgba(0,0,0,0.1)]`}
           style={{ zIndex: 10020 }}
         >
           {title ? (
@@ -83,6 +86,7 @@ const TeamAssistantPickerDropdown: React.FC<Props> = ({
               {subtitle ? <div className='mt-2px text-12px leading-18px text-t-tertiary'>{subtitle}</div> : null}
             </div>
           ) : null}
+          {topSlot ? <div className='shrink-0 px-4px pb-6px'>{topSlot}</div> : null}
           {showEmpty ? (
             <div className='flex items-center justify-center px-12px py-12px text-center text-13px text-t-tertiary'>
               {emptyText}

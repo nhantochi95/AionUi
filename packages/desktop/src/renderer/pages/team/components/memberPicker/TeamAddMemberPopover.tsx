@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Message } from '@arco-design/web-react';
+import { Button, Message } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
+import useSWR from 'swr';
 import type { TeamAssistant } from '@/common/types/team/teamTypes';
 import type { TeamAssistantInput } from '@/common/adapter/teamMapper';
 import { getConversationCreateErrorMessage } from '@renderer/pages/conversation/utils/conversationCreateError';
@@ -10,6 +11,8 @@ import { useTeamTabs } from '../../hooks/TeamTabsContext';
 import type { TeamAssistantOption } from '../assistantSelectUtils';
 import { resolveDefaultTeamAgentModel } from '../teamCreateModelResolver';
 import TeamAssistantPickerDropdown from './TeamAssistantPickerDropdown';
+import QuickCreateMemberInlineForm, { type QuickCreateMemberResult } from '../modelHub/QuickCreateMemberInlineForm';
+import { getTeamHubBridge } from '../modelHub/bridgeSafe';
 
 const useAcpDraft = getSendBoxDraftHook('acp', { _type: 'acp', atPath: [], content: '', uploadFile: [] });
 const useAionrsDraft = getSendBoxDraftHook('aionrs', { _type: 'aionrs', atPath: [], content: '', uploadFile: [] });
@@ -22,8 +25,10 @@ type Props = {
 const TeamAddMemberPopover: React.FC<Props> = ({ children, disabled = false }) => {
   const { t, i18n } = useTranslation();
   const { assistants } = useTeamAssistantOptions(i18n?.language ?? 'en-US');
-  const { addAssistant, switchTab, assistants: teamMembers = [] } = useTeamTabs();
+  const { team_id, addAssistant, switchTab, assistants: teamMembers = [] } = useTeamTabs();
+  const { mutate: mutateTeamCache } = useSWR(team_id ? `team/${team_id}` : null);
   const [visible, setVisible] = useState(false);
+  const [quickCreateOpen, setQuickCreateOpen] = useState(false);
   const [pendingAssistantId, setPendingAssistantId] = useState<string | undefined>();
 
   // Leader 会话草稿：用于「告诉 Leader」预填提示词。Hook 必须无条件调用，
@@ -34,7 +39,10 @@ const TeamAddMemberPopover: React.FC<Props> = ({ children, disabled = false }) =
   const aionrsDraft = useAionrsDraft(leaderConversationId);
 
   useEffect(() => {
-    if (disabled) setVisible(false);
+    if (disabled) {
+      setVisible(false);
+      setQuickCreateOpen(false);
+    }
   }, [disabled]);
 
   const handleTellLeader = useCallback(() => {
@@ -75,18 +83,80 @@ const TeamAddMemberPopover: React.FC<Props> = ({ children, disabled = false }) =
     }
   };
 
+  const handleQuickMemberCreated = useCallback(
+    async ({ response, target }: QuickCreateMemberResult) => {
+      if (response.added_agent && typeof response.added_agent === 'object') {
+        const addedSlotId = (response.added_agent as { slot_id?: string }).slot_id;
+        await mutateTeamCache();
+        setQuickCreateOpen(false);
+        setVisible(false);
+        if (addedSlotId) {
+          switchTab(addedSlotId);
+        }
+        return;
+      }
+
+      if (addAssistant) {
+        const created = await addAssistant({
+          role: 'teammate',
+          assistant_name: response.assistant_name,
+          assistant_id: response.assistant_id,
+          model: target.model_id || 'default',
+        });
+        const hub = getTeamHubBridge();
+        if (team_id && hub?.switchModels?.invoke) {
+          await hub.switchModels.invoke({
+            team_id,
+            scope: 'slots',
+            updates: [{ slot_id: created.slot_id, target }],
+          });
+          await mutateTeamCache();
+        }
+        setQuickCreateOpen(false);
+        setVisible(false);
+        switchTab(created.slot_id);
+      }
+    },
+    [addAssistant, mutateTeamCache, switchTab, team_id]
+  );
+
   return (
     <TeamAssistantPickerDropdown
       assistants={assistants}
       onSelect={handleSelect}
       visible={visible}
-      onVisibleChange={setVisible}
+      onVisibleChange={(next) => {
+        setVisible(next);
+        if (!next) setQuickCreateOpen(false);
+      }}
       disabled={disabled || !addAssistant}
       pendingAssistantId={pendingAssistantId}
       testIdPrefix='team-add-member'
       panelTestId='team-add-member-panel'
       title={t('team.addMember.title', { defaultValue: 'Add member' })}
       subtitle={t('team.addMember.subtitle', { defaultValue: 'The same assistant can be added repeatedly' })}
+      topSlot={
+        <div className='flex flex-col gap-6px'>
+          {!quickCreateOpen ? (
+            <Button
+              size='mini'
+              type='outline'
+              long
+              data-testid='team-add-member-quick-btn'
+              onClick={() => setQuickCreateOpen(true)}
+            >
+              {t('team.modelHub.quickCreateBtn', { defaultValue: '+ Quick Create Member' })}
+            </Button>
+          ) : (
+            <QuickCreateMemberInlineForm
+              teamId={team_id}
+              compact
+              onCreated={handleQuickMemberCreated}
+              onCancel={() => setQuickCreateOpen(false)}
+            />
+          )}
+        </div>
+      }
       guidanceFooter={
         leader?.slot_id ? (
           <div className='text-12px leading-18px text-t-tertiary'>
