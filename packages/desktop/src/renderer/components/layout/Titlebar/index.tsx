@@ -18,6 +18,7 @@ import { resolveFeedbackModule } from '@/renderer/services/feedback/resolveFeedb
 import { isElectronDesktop, isMacOS } from '@/renderer/utils/platform';
 import { IS_DISCONTINUED_BUILD } from '@/renderer/utils/discontinuedBuild';
 import MigrationInviteCapsule from './MigrationInviteCapsule';
+import WhatsNewCapsule from './WhatsNewCapsule';
 import './titlebar.css';
 
 interface TitlebarProps {
@@ -409,6 +410,7 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
       </div>
       <div ref={toolbarRef} className='app-titlebar__toolbar'>
         {layout?.isMobile && <div id='app-titlebar-actions-slot' className='app-titlebar__actions-slot' />}
+        {!layout?.isMobile && <WhatsNewCapsule />}
         {IS_DISCONTINUED_BUILD && <MigrationInviteCapsule />}
         <button
           type='button'

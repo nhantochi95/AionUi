@@ -18,7 +18,19 @@ import {
   Tag,
   Tooltip,
 } from '@arco-design/web-react';
-import { Communication, Delete, EditOne, Exchange, Inbox, Lightning, Peoples, Plus } from '@icon-park/react';
+import {
+  Comment,
+  Communication,
+  Delete,
+  EditOne,
+  Exchange,
+  Inbox,
+  Lightning,
+  Peoples,
+  Plus,
+  ViewGridCard,
+  Wallet,
+} from '@icon-park/react';
 import classNames from 'classnames';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -32,19 +44,20 @@ import type {
   IStagedRoomArtifact,
   SharedRoomTaskStatus,
 } from '@/common/types/sharedRoom';
-import type { ModelTargetSpec } from '@/common/types/team/teamHubTypes';
+import type { ModelTargetSpec, TeamQuotaPreset } from '@/common/types/team/teamHubTypes';
 import SharedRoomFormModal from './SharedRoomFormModal';
 import { useSharedRoomList } from './hooks/useSharedRoomList';
 import { useCompositionInput } from '@renderer/hooks/chat/useCompositionInput';
 import { HybridKanbanBoard } from './components/kanban/HybridKanbanBoard';
 import type { KanbanColumnKey } from './components/kanban/kanbanTypes';
 import { RoundedPillComposer } from './components/RoundedPillComposer';
-import { HoistedPreviewPanel } from './components/HoistedPreviewPanel';
+import { HoistedPreviewPanel, type PreviewSubtab } from './components/HoistedPreviewPanel';
 import { TwoLaneProfiler } from './components/TwoLaneProfiler';
 import ConnectedModelPickerPopover, {
   type ModelPickerSelectionMeta,
 } from '@/renderer/pages/team/components/modelHub/ConnectedModelPickerPopover';
 import TeamContextCompactPopover from '@/renderer/pages/team/components/modelHub/TeamContextCompactPopover';
+import { useConnectedModelsCatalog } from '@/renderer/pages/team/components/modelHub/useConnectedModelsCatalog';
 import { useTeamContextAndModels } from '@/renderer/pages/team/components/modelHub/useTeamContextAndModels';
 import ReactMarkdown from 'react-markdown';
 import CodeBlock from '@renderer/components/Markdown/CodeBlock';
@@ -100,27 +113,50 @@ const TelegramIcon: React.FC<{ size?: number }> = ({ size = 14 }) => (
   </svg>
 );
 
-const ArtifactCard: React.FC<{ artifact: IStagedRoomArtifact }> = ({ artifact }) => {
+const ArtifactCard: React.FC<{
+  artifact: IStagedRoomArtifact;
+  onPreview?: (artifact: IStagedRoomArtifact) => void;
+}> = ({ artifact, onPreview }) => {
   const { t } = useTranslation();
   return (
-    <div className='inline-flex items-center gap-8px px-10px py-6px rd-8px bg-fill-2 border border-solid border-arco-2 text-12px max-w-full'>
-      <span className='font-500 truncate max-w-200px' title={artifact.file_name}>
+    <div
+      data-testid='room-artifact-card'
+      className='inline-flex items-center gap-8px px-10px py-6px rd-8px bg-fill-2 border border-solid border-arco-2 text-12px max-w-full'
+    >
+      <button
+        type='button'
+        onClick={() =>
+          onPreview ? onPreview(artifact) : void ipcBridge.shell.openFile.invoke(artifact.staged_path)
+        }
+        className='font-500 truncate max-w-200px bg-transparent border-0 p-0 text-t-primary hover:text-primary-6 cursor-pointer text-left'
+        title={artifact.file_name}
+      >
         {artifact.is_image ? '🖼️' : '📄'} {artifact.file_name}
-      </span>
+      </button>
       <span className='text-11px text-t-tertiary shrink-0'>({formatBytes(artifact.size_bytes)})</span>
+      {onPreview && (
+        <button
+          type='button'
+          data-testid='artifact-preview-btn'
+          className='text-11px text-primary-6 font-600 bg-transparent border-0 cursor-pointer hover:underline p-0 shrink-0'
+          onClick={() => onPreview(artifact)}
+        >
+          {t('team.sharedRoom.preview.tabArtifacts', 'Preview')}
+        </button>
+      )}
       <button
         type='button'
         className='text-11px text-primary-6 bg-transparent border-0 cursor-pointer hover:underline p-0 shrink-0'
         onClick={() => void ipcBridge.shell.openFile.invoke(artifact.staged_path)}
       >
-        {t('team.sharedRoom.artifactOpen')}
+        {t('team.sharedRoom.artifactOpen', 'Open')}
       </button>
       <button
         type='button'
         className='text-11px text-t-secondary bg-transparent border-0 cursor-pointer hover:underline p-0 shrink-0'
         onClick={() => void ipcBridge.shell.showItemInFolder.invoke(artifact.staged_path)}
       >
-        {t('team.sharedRoom.artifactFolder')}
+        {t('team.sharedRoom.artifactFolder', 'Show in folder')}
       </button>
     </div>
   );
@@ -171,6 +207,8 @@ const SharedRoomPage: React.FC = () => {
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [viewTab, setViewTab] = useState<SharedRoomViewTab>('chat');
   const [selectedTaskId, setSelectedTaskId] = useState<string | undefined>();
+  const [previewSubtab, setPreviewSubtab] = useState<PreviewSubtab | undefined>();
+  const [previewArtifact, setPreviewArtifact] = useState<IStagedRoomArtifact | null>(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [selectedHubTeamId, setSelectedHubTeamId] = useState<string | undefined>();
 
@@ -183,18 +221,67 @@ const SharedRoomPage: React.FC = () => {
       ? selectedHubTeamId
       : defaultHubTeamId;
 
+  const { catalog: hubCatalog } = useConnectedModelsCatalog();
+
   const {
     slots: hubSlots,
     autoCompactEnabled: hubAutoCompactEnabled,
     autoCompactThresholdPct: hubAutoCompactThresholdPct,
+    economyMode: hubEconomyMode,
+    maxContextTokens: hubMaxContextTokens,
+    tokensSavedEstimate: hubTokensSavedEstimate,
+    coalescedWakesSaved: hubCoalescedWakesSaved,
+    totalWakeupTurns: hubTotalWakeupTurns,
+    totalInputTokens: hubTotalInputTokens,
+    totalOutputTokens: hubTotalOutputTokens,
+    totalCachedReadTokens: hubTotalCachedReadTokens,
+    totalEstimatedCostUsd: hubTotalEstimatedCostUsd,
     maxUsagePercent: hubMaxUsagePercent,
     highestLevel: hubHighestLevel,
     compacting: hubCompacting,
     switchingModels: hubSwitchingModels,
     compactTeam: hubCompactTeam,
     toggleAutoCompact: hubToggleAutoCompact,
+    updateEconomyPrefs: hubUpdateEconomyPrefs,
     switchModels: hubSwitchModels,
+    applyQuotaPreset: hubApplyQuotaPreset,
   } = useTeamContextAndModels(activeHubTeamId);
+
+  const roomTurnLatency = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg.sender_type === 'leader') {
+        if (
+          msg.model_latency_ms != null ||
+          msg.tool_latency_ms != null ||
+          msg.total_latency_ms != null
+        ) {
+          const mSec = Number(((msg.model_latency_ms ?? 0) / 1000).toFixed(1));
+          const tSec = Number(((msg.tool_latency_ms ?? 0) / 1000).toFixed(1));
+          const totSec = Number(
+            (
+              (msg.total_latency_ms ??
+                (msg.model_latency_ms ?? 0) + (msg.tool_latency_ms ?? 0)) / 1000
+            ).toFixed(1)
+          );
+          return { modelTimeSec: mSec, toolTimeSec: tSec, totalTimeSec: totSec };
+        }
+        for (let j = i - 1; j >= 0; j--) {
+          const prev = messages[j];
+          if (prev.sender_type === 'user' || prev.sender_type === 'leader') {
+            const deltaMs = msg.created_at - prev.created_at;
+            if (deltaMs > 0 && deltaMs <= 600_000) {
+              const totSec = Number((deltaMs / 1000).toFixed(1));
+              return { modelTimeSec: totSec, toolTimeSec: 0, totalTimeSec: totSec };
+            }
+            break;
+          }
+        }
+        break;
+      }
+    }
+    return { modelTimeSec: 0, toolTimeSec: 0, totalTimeSec: 0 };
+  }, [messages]);
 
   // Telegram room binding popover state
   const [tgPopoverOpen, setTgPopoverOpen] = useState(false);
@@ -223,7 +310,15 @@ const SharedRoomPage: React.FC = () => {
     setEditModalOpen(false);
     setTaskModalOpen(false);
     setSelectedHubTeamId(undefined);
+    setPreviewSubtab(undefined);
+    setPreviewArtifact(null);
   }, [roomId]);
+
+  const handleOpenArtifactInPanel = useCallback((art: IStagedRoomArtifact) => {
+    setPreviewArtifact(art);
+    setPreviewSubtab('preview');
+    setRightPanelOpen(true);
+  }, []);
 
   const handleRoomQuickCompact = useCallback(async () => {
     try {
@@ -263,6 +358,23 @@ const SharedRoomPage: React.FC = () => {
       }
     },
     [hubSwitchModels, t]
+  );
+
+  const handleRoomApplyPreset = useCallback(
+    async (preset: TeamQuotaPreset, forceInterrupt: boolean) => {
+      try {
+        const res = await hubApplyQuotaPreset(preset, hubCatalog, forceInterrupt);
+        const count = res?.outcomes?.length ?? 1;
+        Message.success(
+          t('team.modelHub.switchModelsSuccess', 'Updated models for {{count}} member(s)', { count })
+        );
+      } catch (err) {
+        Message.error(
+          t('team.modelHub.switchModelsFailed', 'Failed to switch models: {{error}}', { error: String(err) })
+        );
+      }
+    },
+    [hubApplyQuotaPreset, hubCatalog, t]
   );
 
   useEffect(() => {
@@ -464,10 +576,11 @@ const SharedRoomPage: React.FC = () => {
     async (taskId: string, targetCol: KanbanColumnKey) => {
       if (!roomId) return;
       try {
+        const apiStatus = targetCol === 'done' ? 'completed' : targetCol;
         await ipcBridge.sharedRoom.updateTask.invoke({
           room_id: roomId,
           task_id: taskId,
-          status: targetCol,
+          status: apiStatus,
         });
         await mutateTasks();
         if (targetCol === 'done') {
@@ -480,6 +593,13 @@ const SharedRoomPage: React.FC = () => {
       }
     },
     [roomId, mutateTasks, t]
+  );
+
+  const handleApproveTaskDone = useCallback(
+    (taskId: string) => {
+      void handleKanbanStatusChange(taskId, 'done');
+    },
+    [handleKanbanStatusChange]
   );
 
 
@@ -678,132 +798,214 @@ const SharedRoomPage: React.FC = () => {
 
   return (
     <div className='h-full w-full flex flex-col overflow-hidden bg-bg-1 text-t-primary'>
-      {/* Top Header */}
-      <header className='shrink-0 border-b border-arco-2 px-16px py-10px flex flex-wrap items-center justify-between gap-10px bg-bg-1'>
-        <div className='flex items-center gap-10px min-w-0 flex-1'>
-          <span className='w-30px h-30px rd-8px bg-[#165DFF]/12 text-[#165DFF] inline-flex items-center justify-center shrink-0'>
-            <Communication theme='outline' size='17' fill='currentColor' />
-          </span>
-          <div className='flex flex-col min-w-0'>
-            <div className='flex items-center gap-8px min-w-0'>
-              <span className='text-15px font-600 truncate'>#{room.name}</span>
-              <span
-                data-testid='room-header-worktree-chip'
-                className='font-mono text-11px px-7px py-2px rd-full bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300 border border-solid border-green-200 dark:border-green-800'
-              >
-                🌿 wt/{room.name}
-              </span>
-              <Tooltip content={t('team.sharedRoom.hopsTooltip')}>
-                <Tag size='small' color={isHopLimitReached ? 'orangered' : 'gray'}>
-                  {t('team.sharedRoom.hopsTag', { current: room.hop_count_since_human, max: room.max_hops })}
-                </Tag>
-              </Tooltip>
+      {/* Top Header (2-Tier Clean Layout) */}
+      <header className='shrink-0 border-b border-solid border-b-base bg-1 flex flex-col'>
+        {/* Primary Row: Room Identity + 3-View Switcher + Room Actions */}
+        <div className='px-16px py-10px flex items-center justify-between gap-12px flex-wrap'>
+          <div className='flex items-center gap-10px min-w-0'>
+            <span className='w-30px h-30px rounded-8px bg-[#165DFF]/12 text-[#165DFF] inline-flex items-center justify-center shrink-0'>
+              <Communication theme='outline' size='17' fill='currentColor' />
+            </span>
+            <div className='flex flex-col min-w-0'>
+              <div className='flex items-center gap-8px min-w-0'>
+                <span className='text-15px font-600 text-t-primary truncate max-w-260px'>#{room.name}</span>
+                <span
+                  data-testid='room-header-worktree-chip'
+                  className='shrink-0 whitespace-nowrap font-mono text-11px px-8px py-2px rounded-full bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300 border border-solid border-green-200 dark:border-green-800'
+                >
+                  🌿 wt/{room.name}
+                </span>
+                <Tooltip content={t('team.sharedRoom.hopsTooltip')}>
+                  <Tag size='small' className='shrink-0 whitespace-nowrap' color={isHopLimitReached ? 'orangered' : 'gray'}>
+                    {t('team.sharedRoom.hopsTag', { current: room.hop_count_since_human, max: room.max_hops })}
+                  </Tag>
+                </Tooltip>
+              </div>
+              {room.description && <span className='text-11px text-t-tertiary truncate max-w-360px'>{room.description}</span>}
             </div>
-            {room.description && <span className='text-11px text-t-tertiary truncate'>{room.description}</span>}
+          </div>
+
+          {/* Segmented 3-Tab Room Switcher (F17) */}
+          <div
+            data-testid='room-view-switcher'
+            className='shrink-0 inline-flex bg-2 p-3px rounded-8px border border-solid border-b-base gap-2px select-none'
+          >
+            <button
+              type='button'
+              data-testid='room-tab-chat'
+              onClick={() => setViewTab('chat')}
+              className={classNames(
+                'px-12px py-5px rounded-6px text-12px font-600 transition-all border-0 outline-none cursor-pointer flex items-center gap-6px whitespace-nowrap',
+                viewTab === 'chat'
+                  ? 'bg-1 text-[rgb(var(--primary-6))] shadow-xs'
+                  : 'bg-transparent text-t-secondary hover:text-t-primary'
+              )}
+            >
+              <Comment theme='outline' size='14' fill='currentColor' className='shrink-0' />
+              <span>{t('team.sharedRoom.tabChat', 'Chat')}</span>
+            </button>
+            <button
+              type='button'
+              data-testid='room-tab-kanban'
+              onClick={() => setViewTab('kanban')}
+              className={classNames(
+                'px-12px py-5px rounded-6px text-12px font-600 transition-all border-0 outline-none cursor-pointer flex items-center gap-6px whitespace-nowrap',
+                viewTab === 'kanban'
+                  ? 'bg-1 text-[rgb(var(--primary-6))] shadow-xs'
+                  : 'bg-transparent text-t-secondary hover:text-t-primary'
+              )}
+            >
+              <ViewGridCard theme='outline' size='14' fill='currentColor' className='shrink-0' />
+              <span>{t('team.sharedRoom.tabKanban', 'Kanban ({{count}})', { count: tasks.length })}</span>
+            </button>
+            <button
+              type='button'
+              data-testid='room-tab-cost'
+              onClick={() => setViewTab('cost')}
+              className={classNames(
+                'px-12px py-5px rounded-6px text-12px font-600 transition-all border-0 outline-none cursor-pointer flex items-center gap-6px whitespace-nowrap',
+                viewTab === 'cost'
+                  ? 'bg-1 text-[rgb(var(--primary-6))] shadow-xs'
+                  : 'bg-transparent text-t-secondary hover:text-t-primary'
+              )}
+            >
+              <Wallet theme='outline' size='14' fill='currentColor' className='shrink-0' />
+              <span>{t('team.sharedRoom.tabCostProfiler', 'Cost & Profiler')}</span>
+            </button>
+          </div>
+
+          {/* Room Utility Actions */}
+          <div className='flex items-center gap-8px shrink-0'>
+            <Popover
+              trigger='click'
+              position='br'
+              className='aion-telegram-bridge-popover'
+              style={{ width: 372, maxWidth: 'calc(100vw - 24px)' }}
+              popupVisible={tgPopoverOpen}
+              onVisibleChange={setTgPopoverOpen}
+              content={tgRoomPopoverContent}
+            >
+              <button
+                type='button'
+                data-testid='shared-room-telegram-btn'
+                className='h-28px px-10px rounded-8px inline-flex items-center gap-6px text-12px font-500 bg-2 hover:bg-3 border border-solid border-b-base cursor-pointer text-t-primary outline-none whitespace-nowrap'
+              >
+                <span className='text-[#2AABEE] inline-flex items-center'>
+                  <TelegramIcon size={13} />
+                </span>
+                <span>Telegram</span>
+                {(room.is_active_dm_target || room.telegram_chat_id) && (
+                  <span className='w-6px h-6px rounded-full bg-success-6' />
+                )}
+              </button>
+            </Popover>
+
+            <Tooltip content={t('team.sharedRoom.configModalTooltip')}>
+              <Button
+                size='small'
+                type='secondary'
+                data-testid='shared-room-edit-btn'
+                icon={<EditOne theme='outline' size='14' fill='currentColor' />}
+                onClick={() => setEditModalOpen(true)}
+              />
+            </Tooltip>
+
+            <Tooltip content={t('team.sharedRoom.deleteRoomTooltip')}>
+              <Button
+                size='small'
+                type='secondary'
+                status='danger'
+                data-testid='shared-room-delete-btn'
+                icon={<Delete theme='outline' size='14' fill='currentColor' />}
+                onClick={handleDeleteCurrentRoom}
+              />
+            </Tooltip>
+
+            <Badge count={openTasksCount} dot={false} maxCount={99} offset={[-3, 3]}>
+              <Button
+                size='small'
+                type={rightPanelOpen && viewTab !== 'cost' ? 'primary' : 'secondary'}
+                onClick={() => {
+                  if (viewTab === 'cost') {
+                    setViewTab('chat');
+                    setRightPanelOpen(true);
+                  } else {
+                    setRightPanelOpen((v) => !v);
+                  }
+                }}
+              >
+                <span className='inline-flex items-center gap-6px'>
+                  <Inbox theme='outline' size='14' fill='currentColor' />
+                  <span>{t('team.sharedRoom.taskAndFileBtn')}</span>
+                </span>
+              </Button>
+            </Badge>
           </div>
         </div>
 
-        {/* Segmented 3-Tab Room Switcher (F17) */}
-        <div
-          data-testid='room-view-switcher'
-          className='inline-flex bg-fill-2 p-3px rd-8px border border-solid border-arco-2 gap-2px select-none'
-        >
-          <button
-            type='button'
-            data-testid='room-tab-chat'
-            onClick={() => setViewTab('chat')}
-            className={classNames(
-              'px-12px py-5px rd-6px text-12px font-600 transition-all border-0 cursor-pointer flex items-center gap-6px',
-              viewTab === 'chat'
-                ? 'bg-bg-1 text-primary-6 shadow-xs'
-                : 'bg-transparent text-t-secondary hover:text-t-primary'
-            )}
-          >
-            <span>💬</span>
-            <span>{t('team.sharedRoom.tabChat', 'Chat')}</span>
-          </button>
-          <button
-            type='button'
-            data-testid='room-tab-kanban'
-            onClick={() => setViewTab('kanban')}
-            className={classNames(
-              'px-12px py-5px rd-6px text-12px font-600 transition-all border-0 cursor-pointer flex items-center gap-6px',
-              viewTab === 'kanban'
-                ? 'bg-bg-1 text-primary-6 shadow-xs'
-                : 'bg-transparent text-t-secondary hover:text-t-primary'
-            )}
-          >
-            <span>📋</span>
-            <span>{t('team.sharedRoom.tabKanban', 'Kanban ({{count}})', { count: tasks.length })}</span>
-          </button>
-          <button
-            type='button'
-            data-testid='room-tab-cost'
-            onClick={() => setViewTab('cost')}
-            className={classNames(
-              'px-12px py-5px rd-6px text-12px font-600 transition-all border-0 cursor-pointer flex items-center gap-6px',
-              viewTab === 'cost'
-                ? 'bg-bg-1 text-primary-6 shadow-xs'
-                : 'bg-transparent text-t-secondary hover:text-t-primary'
-            )}
-          >
-            <span>💰</span>
-            <span>{t('team.sharedRoom.tabCostProfiler', 'Cost & Profiler')}</span>
-          </button>
-        </div>
-
-        {/* Participating Leader Pills */}
-        <div className='flex items-center gap-6px flex-wrap'>
-          {room.members.map((member) => {
-            const accent = teamColorMap.get(member.team_id) ?? '#165DFF';
-            const slug = mentionSlug(member.team_name);
-            const isWorkingHandoff = Boolean(member.pending_handoff_msg_id);
-            return (
-              <Tooltip
-                key={member.team_id}
-                content={t('team.sharedRoom.memberPillTooltip', { slug, name: member.team_name })}
-              >
-                <button
-                  type='button'
-                  className='h-26px px-8px rd-999px inline-flex items-center gap-5px text-12px bg-fill-2 hover:bg-fill-3 border border-solid border-arco-2 cursor-pointer transition-colors'
-                  onClick={(e) => {
-                    if (e.shiftKey) {
-                      void navigate(`/team/${member.team_id}`);
-                    } else {
-                      insertMention(slug);
-                    }
-                  }}
+        {/* Secondary Row: Participating Leader Pills + Context & Model Hub Controls */}
+        <div className='px-16px py-7px border-t border-solid border-b-light bg-2/40 flex items-center justify-between gap-10px flex-wrap'>
+          {/* Participating Leader Pills */}
+          <div className='flex items-center gap-6px flex-wrap min-w-0'>
+            {room.members.map((member) => {
+              const accent = teamColorMap.get(member.team_id) ?? '#165DFF';
+              const slug = mentionSlug(member.team_name);
+              const isWorkingHandoff = Boolean(member.pending_handoff_msg_id);
+              return (
+                <Tooltip
+                  key={member.team_id}
+                  content={t('team.sharedRoom.memberPillTooltip', { slug, name: member.team_name })}
                 >
-                  <span className='w-7px h-7px rd-full shrink-0' style={{ backgroundColor: accent }} />
-                  <span className='font-500 max-w-120px truncate'>{member.team_name}</span>
-                  <span className='text-11px text-t-tertiary'>· {member.leader_name} 👑</span>
-                  {member.is_host && (
-                    <span title={t('team.sharedRoom.hostChairTitle')} className='text-11px'>
-                      🪑
-                    </span>
-                  )}
-                  {isWorkingHandoff && (
-                    <span
-                      title={t('team.sharedRoom.workingHandoffTitle')}
-                      className='w-6px h-6px rd-full bg-primary-6 animate-pulse'
-                    />
-                  )}
-                </button>
-              </Tooltip>
-            );
-          })}
-        </div>
+                  <button
+                    type='button'
+                    className='h-26px px-10px rounded-full inline-flex items-center gap-5px text-12px bg-1 hover:bg-2 border border-solid border-b-base cursor-pointer transition-colors outline-none whitespace-nowrap'
+                    onClick={(e) => {
+                      if (e.shiftKey) {
+                        void navigate(`/team/${member.team_id}`);
+                      } else {
+                        insertMention(slug);
+                      }
+                    }}
+                  >
+                    <span className='w-7px h-7px rounded-full shrink-0' style={{ backgroundColor: accent }} />
+                    <span className='font-500 max-w-140px truncate'>{member.team_name}</span>
+                    <span className='text-11px text-t-tertiary'>· {member.leader_name} 👑</span>
+                    {member.is_host && (
+                      <span title={t('team.sharedRoom.hostChairTitle')} className='text-11px'>
+                        🪑
+                      </span>
+                    )}
+                    {isWorkingHandoff && (
+                      <span
+                        title={t('team.sharedRoom.workingHandoffTitle')}
+                        className='w-6px h-6px rounded-full bg-primary-6 animate-pulse'
+                      />
+                    )}
+                  </button>
+                </Tooltip>
+              );
+            })}
+          </div>
 
-        {/* Header Actions */}
-        <div className='flex items-center gap-8px shrink-0 flex-wrap'>
+          {/* Context & Model Hub Controls */}
           {activeHubTeamId && (
-            <div className='inline-flex items-center gap-6px'>
+            <div className='inline-flex items-center gap-6px flex-wrap'>
               <TeamContextCompactPopover
                 slots={hubSlots}
                 autoCompactEnabled={hubAutoCompactEnabled}
                 autoCompactThresholdPct={hubAutoCompactThresholdPct}
+                economyMode={hubEconomyMode}
+                maxContextTokens={hubMaxContextTokens}
+                tokensSavedEstimate={hubTokensSavedEstimate}
+                coalescedWakesSaved={hubCoalescedWakesSaved}
+                totalWakeupTurns={hubTotalWakeupTurns}
+                totalInputTokens={hubTotalInputTokens}
+                totalOutputTokens={hubTotalOutputTokens}
+                totalCachedReadTokens={hubTotalCachedReadTokens}
+                totalEstimatedCostUsd={hubTotalEstimatedCostUsd}
                 compacting={hubCompacting}
                 onToggleAutoCompact={hubToggleAutoCompact}
+                onUpdateEconomyPrefs={hubUpdateEconomyPrefs}
                 onCompactAll={() => hubCompactTeam({ mode: 'auto' })}
                 onCompactSlot={(slotId) => hubCompactTeam({ slot_id: slotId, mode: 'auto' })}
               >
@@ -812,21 +1014,25 @@ const SharedRoomPage: React.FC = () => {
                   data-testid='shared-room-context-pill'
                   data-context-level={hubHighestLevel}
                   className={classNames(
-                    'h-28px px-9px rd-8px inline-flex items-center gap-5px text-11px font-600 border border-solid cursor-pointer transition-colors',
+                    'h-26px px-10px rounded-6px inline-flex items-center gap-6px text-11px font-600 border border-solid cursor-pointer transition-colors outline-none whitespace-nowrap',
                     hubSlots.length > 0 && hubHighestLevel === 'critical'
                       ? 'bg-red-500/12 border-red-500/30 text-red-700 dark:text-red-300'
                       : hubSlots.length > 0 && hubHighestLevel === 'warning'
                         ? 'bg-amber-500/12 border-amber-500/30 text-amber-700 dark:text-amber-300'
-                        : 'bg-fill-2 hover:bg-fill-3 border-arco-2 text-t-primary'
+                        : 'bg-1 hover:bg-2 border-b-base text-t-primary'
                   )}
                 >
-                  <span className='font-mono'>
-                    {t('team.modelHub.contextSummaryLabel', 'Context {{pct}}%', { pct: hubMaxUsagePercent })}
+                  <span>
+                    {t('team.modelHub.contextSummaryLabel', {
+                      pct: hubMaxUsagePercent,
+                      defaultValue: `Context ${hubMaxUsagePercent}%`,
+                    })}
                   </span>
                   {hubAutoCompactEnabled && (
-                    <span className='px-4px py-0.5px rd-4px bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-10px'>
-                      {t('team.modelHub.autoCompactShort', 'Auto {{threshold}}%', {
+                    <span className='px-5px py-0.5px rounded-4px bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-10px font-600'>
+                      {t('team.modelHub.autoCompactShort', {
                         threshold: hubAutoCompactThresholdPct,
+                        defaultValue: `Auto ${hubAutoCompactThresholdPct}%`,
                       })}
                     </span>
                   )}
@@ -838,9 +1044,9 @@ const SharedRoomPage: React.FC = () => {
                 data-testid='shared-room-compact-btn'
                 disabled={hubCompacting}
                 onClick={() => void handleRoomQuickCompact()}
-                className='h-28px px-10px rd-8px inline-flex items-center gap-5px text-12px font-500 bg-fill-2 hover:bg-fill-3 border border-solid border-arco-2 cursor-pointer text-t-primary disabled:opacity-50'
+                className='h-26px px-10px rounded-6px inline-flex items-center gap-5px text-11px font-500 bg-1 hover:bg-2 border border-solid border-b-base cursor-pointer text-t-primary outline-none whitespace-nowrap disabled:opacity-50'
               >
-                <Lightning theme='outline' size='13' fill='currentColor' />
+                <Lightning theme='outline' size='12' fill='currentColor' className='shrink-0' />
                 <span>{t('team.modelHub.compactBtn', 'Compact Context')}</span>
               </button>
 
@@ -853,77 +1059,20 @@ const SharedRoomPage: React.FC = () => {
                 onSelectTeamId={setSelectedHubTeamId}
                 panelTestId='shared-room-switch-models-panel'
                 onSelectModel={handleRoomSwitchModels}
+                onApplyPreset={handleRoomApplyPreset}
               >
                 <button
                   type='button'
                   data-testid='shared-room-switch-models-btn'
                   disabled={hubSwitchingModels}
-                  className='h-28px px-10px rd-8px inline-flex items-center gap-5px text-12px font-500 bg-fill-2 hover:bg-fill-3 border border-solid border-arco-2 cursor-pointer text-t-primary disabled:opacity-50'
+                  className='h-26px px-10px rounded-6px inline-flex items-center gap-5px text-11px font-500 bg-1 hover:bg-2 border border-solid border-b-base cursor-pointer text-t-primary outline-none whitespace-nowrap disabled:opacity-50'
                 >
-                  <Exchange theme='outline' size='13' fill='currentColor' />
+                  <Exchange theme='outline' size='12' fill='currentColor' className='shrink-0' />
                   <span>{t('team.modelHub.switchTeamModelsBtn', 'Switch Team Models')}</span>
                 </button>
               </ConnectedModelPickerPopover>
             </div>
           )}
-
-          <Popover
-            trigger='click'
-            position='br'
-            className='aion-telegram-bridge-popover'
-            style={{ width: 372, maxWidth: 'calc(100vw - 24px)' }}
-            popupVisible={tgPopoverOpen}
-            onVisibleChange={setTgPopoverOpen}
-            content={tgRoomPopoverContent}
-          >
-            <button
-              type='button'
-              data-testid='shared-room-telegram-btn'
-              className='h-28px px-10px rd-8px inline-flex items-center gap-6px text-12px font-500 bg-fill-2 hover:bg-fill-3 border border-solid border-arco-2 cursor-pointer text-t-primary'
-            >
-              <span className='text-[#2AABEE] inline-flex items-center'>
-                <TelegramIcon size={13} />
-              </span>
-              <span>Telegram</span>
-              {(room.is_active_dm_target || room.telegram_chat_id) && (
-                <span className='w-6px h-6px rd-full bg-success-6' />
-              )}
-            </button>
-          </Popover>
-
-          <Tooltip content={t('team.sharedRoom.configModalTooltip')}>
-            <Button
-              size='small'
-              type='secondary'
-              data-testid='shared-room-edit-btn'
-              icon={<EditOne theme='outline' size='14' fill='currentColor' />}
-              onClick={() => setEditModalOpen(true)}
-            />
-          </Tooltip>
-
-          <Tooltip content={t('team.sharedRoom.deleteRoomTooltip')}>
-            <Button
-              size='small'
-              type='secondary'
-              status='danger'
-              data-testid='shared-room-delete-btn'
-              icon={<Delete theme='outline' size='14' fill='currentColor' />}
-              onClick={handleDeleteCurrentRoom}
-            />
-          </Tooltip>
-
-          <Badge count={openTasksCount} dot={false} maxCount={99} offset={[-3, 3]}>
-            <Button
-              size='small'
-              type={rightPanelOpen ? 'primary' : 'secondary'}
-              onClick={() => setRightPanelOpen((v) => !v)}
-            >
-              <span className='inline-flex items-center gap-6px'>
-                <Inbox theme='outline' size='14' fill='currentColor' />
-                <span>{t('team.sharedRoom.taskAndFileBtn')}</span>
-              </span>
-            </Button>
-          </Badge>
         </div>
       </header>
 
@@ -1004,7 +1153,11 @@ const SharedRoomPage: React.FC = () => {
                       {msg.attachments?.length > 0 && (
                         <div className='flex flex-wrap justify-end gap-6px max-w-[78%]'>
                           {msg.attachments.map((art) => (
-                            <ArtifactCard key={art.staged_path} artifact={art} />
+                            <ArtifactCard
+                              key={art.staged_path}
+                              artifact={art}
+                              onPreview={handleOpenArtifactInPanel}
+                            />
                           ))}
                         </div>
                       )}
@@ -1079,7 +1232,11 @@ const SharedRoomPage: React.FC = () => {
                       {msg.attachments?.length > 0 && (
                         <div className='flex flex-wrap gap-6px'>
                           {msg.attachments.map((art) => (
-                            <ArtifactCard key={art.staged_path} artifact={art} />
+                            <ArtifactCard
+                              key={art.staged_path}
+                              artifact={art}
+                              onPreview={handleOpenArtifactInPanel}
+                            />
                           ))}
                         </div>
                       )}
@@ -1182,8 +1339,11 @@ const SharedRoomPage: React.FC = () => {
               <HybridKanbanBoard
                 tasks={tasks}
                 onTaskStatusChange={handleKanbanStatusChange}
+                onApproveDone={handleApproveTaskDone}
                 onSelectTask={(id) => {
                   setSelectedTaskId(id);
+                  setPreviewArtifact(null);
+                  setPreviewSubtab('preview');
                   setRightPanelOpen(true);
                 }}
                 selectedTaskId={selectedTaskId}
@@ -1195,9 +1355,9 @@ const SharedRoomPage: React.FC = () => {
         {viewTab === 'cost' && (
           <div className='flex-1 min-w-0 flex flex-col h-full overflow-y-auto p-16px max-w-960px mx-auto w-full'>
             <TwoLaneProfiler
-              modelTimeSec={26.0}
-              toolTimeSec={22.2}
-              totalTimeSec={48.2}
+              modelTimeSec={roomTurnLatency.modelTimeSec}
+              toolTimeSec={roomTurnLatency.toolTimeSec}
+              totalTimeSec={roomTurnLatency.totalTimeSec}
               showWalletCards={true}
               teamId={activeHubTeamId}
               roomTeams={room.members}
@@ -1207,16 +1367,27 @@ const SharedRoomPage: React.FC = () => {
 
         {/* Hoisted 380px Preview & Profiler Panel (F21) */}
         <HoistedPreviewPanel
-          open={rightPanelOpen}
+          open={rightPanelOpen && viewTab !== 'cost'}
           onClose={() => setRightPanelOpen(false)}
           selectedTaskId={selectedTaskId}
           task={tasks.find((t) => t.id === selectedTaskId)}
-          worktreeLeaseId={`wt-${room.id}`}
           roomName={room.name}
-          goalAncestry={['Release v2.4', room.name, tasks.find((t) => t.id === selectedTaskId)?.title ?? 'Main Stream']}
+          goalAncestry={[
+            room.name,
+            tasks.find((tk) => tk.id === selectedTaskId)?.title ??
+              t('team.sharedRoom.mainStream', 'Main Stream'),
+          ]}
           onMergeSuccess={mutateTasks}
           teamId={activeHubTeamId}
           roomTeams={room.members}
+          activeSubtabOverride={previewSubtab}
+          onSubtabChange={setPreviewSubtab}
+          previewArtifact={previewArtifact}
+          onSelectArtifact={setPreviewArtifact}
+          onApproveTaskDone={handleApproveTaskDone}
+          modelTimeSec={roomTurnLatency.modelTimeSec}
+          toolTimeSec={roomTurnLatency.toolTimeSec}
+          totalTimeSec={roomTurnLatency.totalTimeSec}
         />
       </div>
 

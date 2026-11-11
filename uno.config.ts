@@ -44,6 +44,13 @@ const backgroundColors = {
   10: 'var(--bg-10)', // bg-10, border-10
   hover: 'var(--bg-hover)', // bg-hover - 悬停背景
   active: 'var(--bg-active)', // bg-active - 激活背景
+  'bg-base': 'var(--bg-base)', // bg-bg-base alias
+  'bg-1': 'var(--bg-1)', // bg-bg-1 alias
+  'bg-2': 'var(--bg-2)', // bg-bg-2 alias
+  'bg-3': 'var(--bg-3)', // bg-bg-3 alias
+  'bg-4': 'var(--bg-4)', // bg-bg-4 alias
+  'bg-5': 'var(--bg-5)', // bg-bg-5 alias
+  'bg-6': 'var(--bg-6)', // bg-bg-6 alias
 };
 
 // ==================== 边框颜色 / Border Colors ====================
@@ -153,6 +160,8 @@ export default defineConfig({
     ['bg-fill-0', { 'background-color': 'var(--fill-0)' }],
     ['bg-fill-white-to-black', { 'background-color': 'var(--fill-white-to-black)' }],
     ['border-special', { 'border-color': 'var(--border-special)' }],
+    ['rd-full', { 'border-radius': '9999px' }],
+    [/^rd-(\d+)px$/, ([, d]: RegExpExecArray) => ({ 'border-radius': `${d}px` })],
 
     // Wiggle animation for attention indicators (e.g. pending permission badge)
     // Shakes briefly then pauses — 3s cycle, active in first ~20%
@@ -185,6 +194,10 @@ export default defineConfig({
           border-width: 0;
           border-style: solid;
           border-color: transparent;
+        }
+        :where(button:not(.arco-btn):not(.arco-switch)) {
+          background-color: transparent;
+          font-family: inherit;
         }
         @keyframes wiggle {
           0%, 20%, 100% { transform: rotate(0deg); }

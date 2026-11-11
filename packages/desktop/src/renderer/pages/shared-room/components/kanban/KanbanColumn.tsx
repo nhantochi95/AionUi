@@ -14,6 +14,7 @@ export interface KanbanColumnProps {
   onToggleCollapse: (key: KanbanColumnDef['key']) => void;
   selectedTaskId?: string;
   onSelectTask?: (id: string) => void;
+  onApproveDone?: (taskId: string) => void;
 }
 
 export const KanbanColumn: React.FC<KanbanColumnProps> = ({
@@ -23,6 +24,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
   onToggleCollapse,
   selectedTaskId,
   onSelectTask,
+  onApproveDone,
 }) => {
   const { t } = useTranslation();
   const { setNodeRef, isOver } = useDroppable({
@@ -139,6 +141,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
               task={task}
               isSelected={task.id === selectedTaskId}
               onSelect={() => onSelectTask?.(task.id)}
+              onApproveDone={onApproveDone}
             />
           ))}
         </SortableContext>

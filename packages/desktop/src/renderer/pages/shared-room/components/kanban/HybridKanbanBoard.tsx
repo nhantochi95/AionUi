@@ -22,6 +22,7 @@ export interface HybridKanbanBoardProps {
   tasks: KanbanTask[];
   onTaskStatusChange?: (taskId: string, targetStatus: KanbanColumnKey) => Promise<void> | void;
   onStatusChange?: (taskId: string, targetStatus: KanbanColumnKey) => Promise<void> | void;
+  onApproveDone?: (taskId: string) => Promise<void> | void;
   selectedTaskId?: string;
   onSelectTask?: (id: string) => void;
   roomId?: string;
@@ -31,6 +32,7 @@ export const HybridKanbanBoard: React.FC<HybridKanbanBoardProps> = ({
   tasks,
   onTaskStatusChange,
   onStatusChange,
+  onApproveDone,
   selectedTaskId,
   onSelectTask,
   roomId = 'default',
@@ -145,6 +147,12 @@ export const HybridKanbanBoard: React.FC<HybridKanbanBoardProps> = ({
             onToggleCollapse={toggleColumnCollapse}
             selectedTaskId={selectedTaskId}
             onSelectTask={onSelectTask}
+            onApproveDone={
+              onApproveDone ??
+              (onTaskStatusChange || onStatusChange
+                ? (taskId) => (onTaskStatusChange || onStatusChange)!(taskId, 'done')
+                : undefined)
+            }
           />
         ))}
       </div>

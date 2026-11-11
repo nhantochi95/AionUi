@@ -60,7 +60,7 @@ describe('F20: Rounded Pill Composer with Wake Chips, Telex IME, Live Steering',
     expect(wtChip).toHaveTextContent('🌿 wt/auth-fix');
   });
 
-  it('renders interactive wake chips and handles muting/adding back targets', () => {
+  it('defaults to Chair-only wake target and handles Wake All / muting / adding back targets', () => {
     const handleSend = vi.fn();
     render(
       <RoundedPillComposer
@@ -71,7 +71,14 @@ describe('F20: Rounded Pill Composer with Wake Chips, Telex IME, Live Steering',
       />
     );
 
+    // Default wakes Chair only (1/2)
+    expect(screen.getByTestId('wake-count-badge')).toHaveTextContent('1/2');
     expect(screen.getByTestId('wake-chip-Backend Lead')).toBeInTheDocument();
+    expect(screen.queryByTestId('wake-chip-Frontend Lead')).not.toBeInTheDocument();
+
+    // Wake All (2) activates all leaders
+    fireEvent.click(screen.getByTestId('wake-all-btn'));
+    expect(screen.getByTestId('wake-count-badge')).toHaveTextContent('2/2');
     expect(screen.getByTestId('wake-chip-Frontend Lead')).toBeInTheDocument();
 
     // Mute Frontend Lead
@@ -89,6 +96,32 @@ describe('F20: Rounded Pill Composer with Wake Chips, Telex IME, Live Steering',
     expect(screen.getByTestId('wake-chip-Frontend Lead')).toBeInTheDocument();
   });
 
+  it('auto-routes wake chips deterministically from @mentions and @all', () => {
+    const handleSend = vi.fn();
+    render(
+      <RoundedPillComposer
+        roomId='room-1'
+        roomName='auth-fix'
+        members={mockMembers}
+        onSendMessage={handleSend}
+      />
+    );
+
+    const input = screen.getByTestId('rounded-pill-input');
+    fireEvent.change(input, { target: { value: 'Hey @frontend-lead please review' } });
+    expect(screen.getByTestId('wake-chip-Frontend Lead')).toBeInTheDocument();
+    expect(screen.queryByTestId('wake-chip-Backend Lead')).not.toBeInTheDocument();
+
+    fireEvent.change(input, { target: { value: 'Syncing @all on release' } });
+    expect(screen.getByTestId('wake-chip-Backend Lead')).toBeInTheDocument();
+    expect(screen.getByTestId('wake-chip-Frontend Lead')).toBeInTheDocument();
+
+    // Clearing @mention reverts cleanly to Chair-only default
+    fireEvent.change(input, { target: { value: 'Plain question for chair' } });
+    expect(screen.getByTestId('wake-chip-Backend Lead')).toBeInTheDocument();
+    expect(screen.queryByTestId('wake-chip-Frontend Lead')).not.toBeInTheDocument();
+  });
+
   it('displays fallback when all wake targets are muted', () => {
     const handleSend = vi.fn();
     render(
@@ -101,7 +134,6 @@ describe('F20: Rounded Pill Composer with Wake Chips, Telex IME, Live Steering',
     );
 
     fireEvent.click(screen.getByTestId('mute-chip-Backend Lead'));
-    fireEvent.click(screen.getByTestId('mute-chip-Frontend Lead'));
 
     expect(screen.getByText('General note (no agents woken)')).toBeInTheDocument();
   });
@@ -118,10 +150,10 @@ describe('F20: Rounded Pill Composer with Wake Chips, Telex IME, Live Steering',
     );
 
     const toggle = screen.getByTestId('live-steering-toggle');
-    expect(toggle).toHaveTextContent('⚡ Live steering: Active');
+    expect(toggle).toHaveTextContent('Live steering: Active');
 
     fireEvent.click(toggle);
-    expect(toggle).toHaveTextContent('⚡ Live steering: Off');
+    expect(toggle).toHaveTextContent('Live steering: Off');
   });
 
   it('protects Vietnamese IME during composition and sends on Enter when not composing', async () => {
@@ -165,7 +197,7 @@ describe('F20: Rounded Pill Composer with Wake Chips, Telex IME, Live Steering',
       expect.objectContaining({
         content: 'Sửa lỗi refresh token tiếng Việt',
         liveSteering: true,
-        wokenTargets: ['Backend Lead', 'Frontend Lead'],
+        wokenTargets: ['Backend Lead'],
       })
     );
   });

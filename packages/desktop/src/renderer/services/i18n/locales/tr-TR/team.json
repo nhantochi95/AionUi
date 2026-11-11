@@ -76,7 +76,10 @@
     "memberHint": "No suitable assistant as a member? After creation, let the Leader create temporary team members in chat.",
     "telegramLabel": "Telegram",
     "telegramProactiveNotice": "Proactive Leader reports",
-    "telegramActiveDmDefault": "Set as active DM channel"
+    "telegramActiveDmDefault": "Set as active DM channel",
+    "workspaceModeLabel": "Isolation",
+    "workspaceModeShared": "Shared Folder",
+    "workspaceModeIsolated": "Isolated Git Worktree"
   },
   "removeAgent": {
     "confirmTitle": "Takım Üyesini Kaldır",
@@ -185,12 +188,22 @@
       "pending": "Beklemede",
       "in_progress": "Devam ediyor",
       "completed": "Tamamlandı",
-      "deleted": "Silindi"
+      "deleted": "Silindi",
+      "todo": "To do",
+      "backlog": "Backlog",
+      "in_review": "In review",
+      "blocked": "Blocked"
     },
     "msgType": {
       "message": "Mesaj",
       "idle_notification": "Boşta bildirimi",
       "shutdown_request": "Kapatma isteği"
+    },
+    "digest": {
+      "DONE": "Done",
+      "DONE_WITH_CONCERNS": "Done w/ Concerns",
+      "BLOCKED": "Blocked",
+      "NEEDS_CONTEXT": "Needs Context"
     }
   },
   "sharedRoom": {
@@ -343,36 +356,47 @@
       "subtasks": "Subtasks: {{done}}/{{total}}",
       "title": "Cross-Team Task Kanban",
       "tasksCount": "tasks",
-      "waitingBlockers": "Waiting for {{count}} prerequisite task(s)"
+      "waitingBlockers": "Waiting for {{count}} prerequisite task(s)",
+      "approveDoneBtn": "Approve Done"
     },
     "composer": {
-      "wakeLabel": "⚡ Will wake:",
+      "wakeLabel": "Will wake:",
       "noWakeAgents": "General note (no agents woken)",
-      "liveSteeringOn": "⚡ Live steering: Active",
-      "liveSteeringOff": "⚡ Live steering: Off",
+      "liveSteeringOn": "Live steering: Active",
+      "liveSteeringOff": "Live steering: Off",
       "attachFiles": "Attach files",
-      "send": "Send"
+      "send": "Send",
+      "wakeAllBtn": "+ Wake All ({{count}})"
     },
     "preview": {
-      "tabDiff": "🔀 Git Diff",
-      "tabProfiler": "⏱️ Profiler",
-      "tabArtifacts": "👁️ Preview",
-      "goalAncestry": "🎯 GOAL ANCESTRY",
-      "mergeBtn": "✓ Approve & Merge branch ({{branch}} → main)",
-      "alreadyMerged": "✓ Branch already merged into main",
+      "tabDiff": "Git Diff",
+      "tabProfiler": "Profiler",
+      "tabArtifacts": "Preview",
+      "goalAncestry": "GOAL ANCESTRY",
+      "mergeBtn": "Approve & Merge branch ({{branch}} → main)",
+      "alreadyMerged": "Branch already merged into main",
       "mergeSuccess": "Branch successfully squash-merged into main",
       "isolationNotice": "Isolated Git Worktree: {{branch}}. Changes do not touch .git/index.lock of the main workspace.",
       "profiler": {
-        "modelLane": "🧠 Model Latency",
-        "toolLane": "🛠️ Tool / CLI Latency",
+        "modelLane": "Model Latency",
+        "toolLane": "Tool / CLI Latency",
         "totalTurnaround": "Total Turnaround: {{time}}s",
         "dualWallet": "Dual Wallet Overview",
         "walletCli": "Wallet 1: CLI Subscription ($0 OAuth)",
         "walletApi": "Wallet 2: API Key (Pay-per-token)",
         "runsCount": "{{count}} runs",
-        "timelineTitle": "2-Lane Execution Timeline"
-      }
-    }
+        "timelineTitle": "2-Lane Execution Timeline",
+        "noCliEnginesYet": "Direct OAuth CLI engines"
+      },
+      "closePanel": "Close preview panel",
+      "readyForHumanApproval": "Ready for Human Done Approval",
+      "taskFallbackTitle": "Task #{{id}}",
+      "artifactsHeading": "ARTIFACTS & DELIVERABLES",
+      "noDeliverables": "No deliverables attached yet.",
+      "noWorktreeDiff": "No active isolated Git worktree diff for this selection.",
+      "mergeFailed": "Failed to merge worktree branch: {{error}}"
+    },
+    "mainStream": "Main Stream"
   },
   "telegramBridge": {
     "proactiveReportSent": "Sent proactive report ({{kind}})",
@@ -432,7 +456,7 @@
     "filesChanged": "{{count}} files changed",
     "worktreeMerge": {
       "title": "Git Worktree Merge Review",
-      "approveBtn": "✓ Approve & Merge",
+      "approveBtn": "Approve & Merge",
       "rejectBtn": "Reject / Discard",
       "rejectSuccess": "Worktree merge rejected",
       "approveSuccess": "Worktree merged into {{target}}"
@@ -440,7 +464,8 @@
     "multipleChoice": {
       "title": "Agent Question",
       "confirmBtn": "Confirm Choice",
-      "success": "Choice submitted to agent"
+      "success": "Choice submitted to agent",
+      "recommended": "Recommended"
     },
     "maxHops": {
       "title": "Max-Hops Loop Guard",
@@ -448,7 +473,8 @@
       "telegramSynced": "Telegram Synced",
       "unlockBtn": "+ Extend 5 Hops",
       "stopBtn": "Stop Agent",
-      "success": "Granted 5 additional hops"
+      "success": "Granted 5 additional hops",
+      "hopsCount": "{{current}} / {{max}} hops"
     },
     "budgetWarning": {
       "title": "Dual Wallet Budget Alert",
@@ -456,6 +482,16 @@
       "remainingLabel": "Remaining: ${{remaining}}",
       "reviewBtn": "Acknowledge & Keep Cap",
       "success": "Budget alert acknowledged"
+    },
+    "approveDone": {
+      "title": "Human Done Approval",
+      "approveBtn": "Approve Done",
+      "rejectBtn": "Request Changes"
+    },
+    "quotaFallback": {
+      "title": "Quota Fallback Request",
+      "switchBtn": "Switch to $0 CLI",
+      "keepPausedBtn": "Keep Paused"
     }
   },
   "modelHub": {
@@ -511,6 +547,33 @@
     "anchoredBadge": "Sabit Özet",
     "pendingSwapBadge": "Bekleyen değişim → {{model}}",
     "noSlotsContext": "Ekip üyeleri etkinleştiğinde bağlam kullanımı görünür",
-    "selectTeamLabel": "Ekip"
+    "selectTeamLabel": "Ekip",
+    "quotaPresetsLabel": "1-Click Quota Presets",
+    "presetSmartSplit": "Smart Split: Pro Lead + $0 CLI",
+    "presetSmartSplitShort": "Smart Split ($0 Workers)",
+    "presetAllFreeCli": "100% $0 CLI",
+    "presetAppliedSmartSplit": "Applied Smart Split: Pro Leader + $0 CLI teammates",
+    "presetAppliedFreeCli": "Switched team to 100% $0 CLI subscription models",
+    "economyModeLabel": "Team Economy Mode",
+    "economyModeLean": "Lean Digest",
+    "economyModeLeanHint": "Batched digest · min wakes",
+    "economyModeBalanced": "Balanced",
+    "economyModeBalancedHint": "Standard handoffs",
+    "economyModeVerbose": "Verbose",
+    "economyModeVerboseHint": "Full raw logs",
+    "smartCeilingLabel": "160K Smart Context Ceiling",
+    "smartCeilingDesc": "Cap active context at 160K tokens to avoid long-context drift & surcharges",
+    "smartCeilingBadge": "160K Cap",
+    "economySavingsBadge": "Saved ~{{tokens}} tok · {{wakes}} wakes",
+    "compactSlotAction": "Compact Context",
+    "compactSlotActionDesc": "Summarize history to free tokens without losing task progress",
+    "compactSlotSuccess": "Compacted slot context window",
+    "slotRecoveryBannerTitle": "Agent runtime failed or quota paused — retry or switch to a $0 CLI model",
+    "slotRecoveryRetryBtn": "Retry",
+    "slotRecoverySwitchBtn": "Switch Model",
+    "actualTokensLabel": "Gerçek",
+    "actualTokensBreakdown": "Giriş {{input}} · Önbellek {{cached}} · Çıkış {{output}}",
+    "kvCacheHitBadge": "KV-Cache {{pct}}%",
+    "slotTokensSummary": "Giriş {{input}} · Önbellek {{cached}} · Çıkış {{output}}"
   }
 }

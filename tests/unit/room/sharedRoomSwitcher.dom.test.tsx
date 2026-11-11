@@ -213,7 +213,8 @@ describe('F17: Segmented 3-Tab Room Switcher (Chat | Kanban | Cost & Profiler)',
     });
     expect(screen.getByText('Refresh').tagName.toLowerCase()).toBe('strong');
 
-    // Mute Backend Lead chip so only Frontend Lead remains in wake_targets
+    // Enable Frontend Lead and mute Backend Lead chip so only Frontend Lead remains in wake_targets
+    fireEvent.click(screen.getByRole('button', { name: '+@Frontend Lead' }));
     fireEvent.click(screen.getByTestId('mute-chip-Backend Lead'));
     fireEvent.change(screen.getByTestId('rounded-pill-input'), {
       target: { value: 'Only wake frontend' },

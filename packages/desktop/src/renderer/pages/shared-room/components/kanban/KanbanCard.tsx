@@ -3,14 +3,15 @@ import { useTranslation } from 'react-i18next';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Tag } from '@arco-design/web-react';
-import { Lock } from '@icon-park/react';
+import { CheckOne, Lock } from '@icon-park/react';
 import classNames from 'classnames';
-import type { KanbanTask } from './kanbanTypes';
+import { normalizeTaskStatus, type KanbanTask } from './kanbanTypes';
 
 export interface KanbanCardProps {
   task: KanbanTask;
   isSelected?: boolean;
   onSelect?: () => void;
+  onApproveDone?: (taskId: string) => void;
   disabled?: boolean;
 }
 
@@ -18,6 +19,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
   task,
   isSelected,
   onSelect,
+  onApproveDone,
   disabled = false,
 }) => {
   const { t } = useTranslation();
@@ -121,6 +123,25 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
               count: task.blocked_by.length,
             })}
           </span>
+        </div>
+      )}
+
+      {/* Human-Only Approve Done Action for in_review tasks */}
+      {normalizeTaskStatus(task.status) === 'in_review' && onApproveDone && (
+        <div className='pt-2px flex items-center justify-end'>
+          <button
+            type='button'
+            data-testid={`kanban-approve-done-${task.id}`}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onApproveDone(task.id);
+            }}
+            className='px-8px py-3px rd-6px bg-emerald-500/15 hover:bg-emerald-500/25 border border-solid border-emerald-500/40 text-11px font-600 text-emerald-700 dark:text-emerald-300 inline-flex items-center gap-4px cursor-pointer transition-colors'
+          >
+            <CheckOne size='12' className='shrink-0' />
+            <span>{t('team.sharedRoom.kanban.approveDoneBtn', 'Approve Done')}</span>
+          </button>
         </div>
       )}
     </div>

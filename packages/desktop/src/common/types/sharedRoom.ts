@@ -89,10 +89,21 @@ export interface ISharedRoomMessage {
   attachments: IStagedRoomArtifact[];
   target_team_ids: string[];
   hop_index: number;
+  model_latency_ms?: number;
+  tool_latency_ms?: number;
+  total_latency_ms?: number;
   created_at: number;
 }
 
-export type SharedRoomTaskStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
+export type SharedRoomTaskStatus =
+  | 'backlog'
+  | 'todo'
+  | 'pending'
+  | 'in_progress'
+  | 'in_review'
+  | 'blocked'
+  | 'completed'
+  | 'cancelled';
 
 export interface ISharedRoomTask {
   id: string;

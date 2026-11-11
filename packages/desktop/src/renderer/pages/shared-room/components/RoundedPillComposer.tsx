@@ -1,10 +1,44 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Tooltip } from '@arco-design/web-react';
 import { Up, Close, Lightning, Paperclip } from '@icon-park/react';
 import classNames from 'classnames';
 import { useCompositionInput } from '@renderer/hooks/chat/useCompositionInput';
 import type { ISharedRoomMember, ISharedRoomMessage } from '@/common/types/sharedRoom';
+
+function mentionSlug(name: string): string {
+  return name
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^\p{L}\p{N}_-]/gu, '_')
+    .replace(/^[-_]+|[-_]+$/g, '')
+    .toLowerCase();
+}
+
+function resolveDefaultChairTargets(members: ISharedRoomMember[]): string[] {
+  if (members.length === 0) return [];
+  const chair = members.find((m) => m.is_host) ?? members[0];
+  return chair ? [chair.team_name] : [];
+}
+
+function parseMentionedTargets(inputText: string, members: ISharedRoomMember[]): string[] | null {
+  if (!inputText.includes('@') || members.length === 0) return null;
+  if (/(?:^|\s)@all(?=\s|$|[.,!?;:])/i.test(inputText)) {
+    return members.map((m) => m.team_name);
+  }
+  const lower = inputText.toLowerCase();
+  const matched: string[] = [];
+  for (const m of members) {
+    const slug = mentionSlug(m.team_name);
+    const rawLower = m.team_name.trim().toLowerCase();
+    const hasSlug = slug.length > 0 && lower.includes(`@${slug}`);
+    const hasRaw = rawLower.length > 0 && lower.includes(`@${rawLower}`);
+    if ((hasSlug || hasRaw) && !matched.includes(m.team_name)) {
+      matched.push(m.team_name);
+    }
+  }
+  return matched.length > 0 ? matched : null;
+}
 
 export interface RoundedPillComposerProps {
   roomId: string;
@@ -40,23 +74,43 @@ export const RoundedPillComposer: React.FC<RoundedPillComposerProps> = ({
   const [text, setText] = useState('');
   const [liveSteering, setLiveSteering] = useState(true);
   const [attachedFiles, setAttachedFiles] = useState<string[]>([]);
+  const manualWakeOverrideRef = useRef(false);
   const [wokenTargets, setWokenTargets] = useState<string[]>(() =>
-    members.map((m) => m.team_name)
+    resolveDefaultChairTargets(members)
   );
 
-  // Sync members into wokenTargets when members update
+  // Sync members into Chair-only default wokenTargets when room membership changes
   useEffect(() => {
-    setWokenTargets(members.map((m) => m.team_name));
+    manualWakeOverrideRef.current = false;
+    setWokenTargets(resolveDefaultChairTargets(members));
   }, [members]);
 
   const { compositionHandlers, createKeyDownHandler } = useCompositionInput();
 
+  const handleTextChange = (nextText: string) => {
+    setText(nextText);
+    const mentioned = parseMentionedTargets(nextText, members);
+    if (mentioned !== null) {
+      manualWakeOverrideRef.current = false;
+      setWokenTargets(mentioned);
+    } else if (!manualWakeOverrideRef.current) {
+      setWokenTargets(resolveDefaultChairTargets(members));
+    }
+  };
+
   const handleRemoveTarget = (targetName: string) => {
+    manualWakeOverrideRef.current = true;
     setWokenTargets((prev) => prev.filter((name) => name !== targetName));
   };
 
   const handleAddBackTarget = (targetName: string) => {
+    manualWakeOverrideRef.current = true;
     setWokenTargets((prev) => (prev.includes(targetName) ? prev : [...prev, targetName]));
+  };
+
+  const handleWakeAll = () => {
+    manualWakeOverrideRef.current = true;
+    setWokenTargets(members.map((m) => m.team_name));
   };
 
   const handleSend = async () => {
@@ -72,6 +126,8 @@ export const RoundedPillComposer: React.FC<RoundedPillComposerProps> = ({
       });
       setText('');
       setAttachedFiles([]);
+      manualWakeOverrideRef.current = false;
+      setWokenTargets(resolveDefaultChairTargets(members));
       onClearReply?.();
     } catch (err) {
       console.error('Failed to send message:', err);
@@ -114,7 +170,7 @@ export const RoundedPillComposer: React.FC<RoundedPillComposerProps> = ({
       {/* Signature Pill Container */}
       <div
         className={classNames(
-          'border border-solid border-arco-2 rd-18px bg-fill-2 p-12px transition-all flex flex-col gap-8px focus-within:border-[rgb(var(--primary-6))] focus-within:bg-bg-1 focus-within:shadow-md'
+          'border border-solid border-b-base rounded-18px bg-1 p-12px shadow-sm transition-all flex flex-col gap-8px focus-within:border-[rgb(var(--primary-6))] focus-within:shadow-md'
         )}
         style={{ borderRadius: '18px' }}
       >
@@ -123,9 +179,17 @@ export const RoundedPillComposer: React.FC<RoundedPillComposerProps> = ({
           data-testid='wake-chips-strip'
           className='flex items-center gap-6px flex-wrap text-11px'
         >
-          <span className='text-t-tertiary font-medium flex items-center gap-2px select-none'>
-            <Lightning theme='filled' size='12' className='text-yellow-500' />
-            {t('team.sharedRoom.composer.wakeLabel', '⚡ Will wake:')}
+          <span className='text-t-tertiary font-medium flex items-center gap-4px select-none'>
+            <Lightning theme='filled' size='12' className='text-yellow-500 shrink-0' />
+            <span>{t('team.sharedRoom.composer.wakeLabel', 'Will wake:')}</span>
+            {members.length > 0 && (
+              <span
+                data-testid='wake-count-badge'
+                className='px-5px py-0.5px rd-full bg-fill-3 text-t-secondary font-mono text-10px'
+              >
+                {wokenTargets.length}/{members.length}
+              </span>
+            )}
           </span>
 
           {wokenTargets.map((target) => (
@@ -160,6 +224,7 @@ export const RoundedPillComposer: React.FC<RoundedPillComposerProps> = ({
               <button
                 key={m.team_id}
                 type='button'
+                data-testid={`add-wake-chip-${m.team_name}`}
                 onClick={() => handleAddBackTarget(m.team_name)}
                 className='border border-dashed border-arco-2 bg-transparent rd-full px-6px py-1px text-10px text-t-tertiary hover:text-[rgb(var(--primary-6))] hover:border-[rgb(var(--primary-6))] cursor-pointer'
               >
@@ -167,11 +232,25 @@ export const RoundedPillComposer: React.FC<RoundedPillComposerProps> = ({
               </button>
             ))}
 
+          {/* 1-Click Wake All Chip when subset is selected */}
+          {members.length > 1 && wokenTargets.length < members.length && (
+            <button
+              type='button'
+              data-testid='wake-all-btn'
+              onClick={handleWakeAll}
+              className='border border-solid border-amber-500/40 bg-amber-500/10 rd-full px-7px py-1px text-10px font-600 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 cursor-pointer'
+            >
+              {t('team.sharedRoom.composer.wakeAllBtn', '+ Wake All ({{count}})', {
+                count: members.length,
+              })}
+            </button>
+          )}
+
           {/* Worktree Chip */}
           {activeWorktree && (
             <span
               data-testid='worktree-pill-chip'
-              className='ms-auto inline-flex items-center gap-4px px-8px py-2px rd-full font-mono text-10px bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800'
+              className='ms-auto shrink-0 whitespace-nowrap inline-flex items-center gap-4px px-8px py-2px rounded-full font-mono text-10px bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300 border border-solid border-green-200 dark:border-green-800'
             >
               🌿 {activeWorktree}
             </span>
@@ -183,7 +262,7 @@ export const RoundedPillComposer: React.FC<RoundedPillComposerProps> = ({
           data-testid='rounded-pill-input'
           rows={2}
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => handleTextChange(e.target.value)}
           {...compositionHandlers}
           onKeyDown={createKeyDownHandler(handleSend)}
           placeholder={t(
@@ -238,17 +317,17 @@ export const RoundedPillComposer: React.FC<RoundedPillComposerProps> = ({
               data-testid='live-steering-toggle'
               onClick={() => setLiveSteering((prev) => !prev)}
               className={classNames(
-                'border-0 px-8px py-3px rd-6px text-11px font-medium flex items-center gap-4px cursor-pointer transition-all',
+                'border border-solid px-8px py-3px rounded-full text-11px font-medium inline-flex items-center gap-4px cursor-pointer transition-all outline-none',
                 liveSteering
-                  ? 'bg-yellow-50 dark:bg-yellow-950/40 text-yellow-700 dark:text-yellow-300 font-bold'
-                  : 'bg-fill-3 text-t-tertiary'
+                  ? 'bg-amber-500/12 border-amber-500/30 text-amber-700 dark:text-amber-300 font-600'
+                  : 'bg-2 border-b-base text-t-tertiary hover:text-t-secondary'
               )}
             >
-              <Lightning theme={liveSteering ? 'filled' : 'outline'} size='12' />
+              <Lightning theme={liveSteering ? 'filled' : 'outline'} size='12' className='shrink-0' />
               <span>
                 {liveSteering
-                  ? t('team.sharedRoom.composer.liveSteeringOn', '⚡ Live steering: Active')
-                  : t('team.sharedRoom.composer.liveSteeringOff', '⚡ Live steering: Off')}
+                  ? t('team.sharedRoom.composer.liveSteeringOn', 'Live steering: Active')
+                  : t('team.sharedRoom.composer.liveSteeringOff', 'Live steering: Off')}
               </span>
             </button>
           </div>

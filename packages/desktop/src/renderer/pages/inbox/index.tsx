@@ -32,7 +32,12 @@ const ActionInboxPage: React.FC = () => {
       to_team_name: String(selectedCard.details?.team_name || selectedCard.target_id),
       title: selectedCard.title,
       description: selectedCard.summary,
-      status: selectedCard.status === 'resolved' ? 'completed' : 'in_progress',
+      status:
+        selectedCard.status === 'resolved'
+          ? 'completed'
+          : selectedCard.category === 'approve_done'
+            ? 'in_review'
+            : 'in_progress',
       blocked_by: [],
       artifacts: [],
       created_at: selectedCard.created_at,
@@ -91,6 +96,11 @@ const ActionInboxPage: React.FC = () => {
         task={previewTask}
         worktreeLeaseId={previewLeaseId}
         roomName={String(selectedCard?.details?.room_name || selectedCard?.target_id || 'inbox')}
+        onApproveTaskDone={() => {
+          if (selectedCard && selectedCard.status === 'pending') {
+            void resolveCard(selectedCard.id, 'approve');
+          }
+        }}
         onMergeSuccess={() => {
           if (selectedCard && selectedCard.status === 'pending') {
             void resolveCard(selectedCard.id, 'approve');

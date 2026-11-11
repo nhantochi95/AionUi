@@ -90,6 +90,7 @@ const useDebug = () => {
 };
 
 const UpdateModal = React.lazy(() => import('@/renderer/components/settings/UpdateModal'));
+const WhatsNewDialog = React.lazy(() => import('@/renderer/components/settings/WhatsNewDialog'));
 
 const DEFAULT_SIDER_WIDTH = 260;
 const DESKTOP_COLLAPSED_WIDTH = 0;
@@ -507,6 +508,7 @@ const Layout: React.FC<{
                 <PwaPullToRefresh />
                 <Suspense fallback={null}>
                   <UpdateModal />
+                  <WhatsNewDialog />
                 </Suspense>
                 {IS_DISCONTINUED_BUILD && <UpdateMigrationDialog />}
               </ArcoLayout.Content>

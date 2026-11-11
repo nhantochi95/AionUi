@@ -22,9 +22,26 @@ type Props = {
 
 const STATUS_COLOR: Record<string, string> = {
   pending: 'gray',
+  todo: 'gray',
+  backlog: 'gray',
   in_progress: 'arcoblue',
+  in_review: 'purple',
+  blocked: 'orangered',
   completed: 'green',
+  done: 'green',
   deleted: 'red',
+};
+
+const STATUS_FALLBACK: Record<string, string> = {
+  pending: 'Pending',
+  todo: 'To Do',
+  backlog: 'Backlog',
+  in_progress: 'In progress',
+  in_review: 'In review',
+  blocked: 'Blocked',
+  completed: 'Completed',
+  done: 'Completed',
+  deleted: 'Deleted',
 };
 
 /**
@@ -108,7 +125,7 @@ const TaskCard: React.FC<Props> = ({ task, identity }) => {
         <ListView theme='outline' size='13' fill='currentColor' className='text-[color:var(--color-text-2)]' />
         <span className='truncate text-13px font-medium text-[color:var(--color-text-1)] flex-1'>{task.subject}</span>
         <Tag size='small' color={STATUS_COLOR[task.status] ?? 'gray'}>
-          {t(`team.activity.status.${task.status}`, { defaultValue: task.status })}
+          {t(`team.activity.status.${task.status}`, { defaultValue: STATUS_FALLBACK[task.status] ?? task.status })}
         </Tag>
       </div>
 

@@ -92,5 +92,44 @@
       "promise4": "The open-source repository stays actively maintained, core features stay in sync, and the open-source spirit remains.",
       "noRush": "If you would rather wait, the current version keeps working as usual — it simply no longer receives updates. And once you have completed the first sign-in on the new version, your local data has already moved there, so please use the new version as your day-to-day entry point."
     }
+  },
+  "whatsNew": {
+    "capsule": "v{{version}}",
+    "capsuleTooltip": "Có gì mới trong bản v{{version}}",
+    "buttonLabel": "Có gì mới",
+    "title": "Có gì mới trong AionUi v{{version}}",
+    "subtitle": "Nhân AionCore v0.3.0 · Phát hành 11/11/2026",
+    "gotIt": "Đã hiểu",
+    "viewFullChangelog": "Xem đầy đủ Changelog trên GitHub",
+    "sections": {
+      "warmAcp": {
+        "badge": "Tốc độ & KV-Cache",
+        "title": "Phiên Warm ACP sống xuyên lượt & phản hồi ~3.1 giây",
+        "item1": "WarmAcpClient (JSON-RPC 2.0) giữ phiên Antigravity luôn ấm giữa các lượt gọi (không bị khởi động lại tiến trình, tỷ lệ trúng KV-cache đạt 88.6%).",
+        "item2": "Tự động tách cấu hình toàn cục dư thừa (--include-default-customizations=false) cho các slot trong Team giúp giảm mạnh độ trễ khởi động.",
+        "item3": "Hiển thị trực tiếp token Thực nạp (In / Cache / Out) và huy hiệu KV-Cache % ngay trong bảng Nén ngữ cảnh Team."
+      },
+      "teamToken": {
+        "badge": "Tiết kiệm 76% Token",
+        "title": "Giao & chốt việc 1 chạm (1-Shot) & Gộp nhịp đánh thức",
+        "item1": "Triệt tiêu 100% lượt đánh thức ảo khi thành viên về trạng thái nghỉ (idle) và tự gộp báo cáo song song trong cửa sổ 1.5s / 4.5s.",
+        "item2": "Gộp báo cáo nguyên tử 1 bước qua team_task_update (reply_message + reply_files), giao việc hàng loạt create-batch, mã task rút gọn 8 ký tự và TaskBoardDigestCursor (-85.4% dung lượng bảng việc).",
+        "item3": "Bảo toàn bền vững role_prompt và biên bản bàn giao (handover) trong SQLite sau khi nén ngữ cảnh thông minh 3 tầng ở ngưỡng 160K."
+      },
+      "hybridHub": {
+        "badge": "Điều phối Đa Team",
+        "title": "Phòng họp chung, Git Worktree cô lập & Hộp thư Duyệt lệnh",
+        "item1": "Phòng họp chung đa đội mặc định gửi cho Chủ trì (tiết kiệm 50-67% token lan truyền), hỗ trợ @all phát toàn phòng và bộ đếm lượt hop trực quan.",
+        "item2": "Nhánh Git Worktree cô lập cho từng tác vụ kèm nút Gộp nhánh (Squash Merge) 1 chạm và chốt chặn chỉ con người mới được duyệt Hoàn tất (Done).",
+        "item3": "Đồng bộ 2 chiều Hộp thư Duyệt lệnh (Action Inbox) trên Desktop với nút bấm trực tiếp trên Telegram qua khóa nguyên tử một lần."
+      },
+      "walletI18n": {
+        "badge": "Hạn mức & Trải nghiệm",
+        "title": "Ví kép ($0 Gói CLI) & Chuẩn hóa 14 ngôn ngữ",
+        "item1": "Tách bạch gói đăng nhập CLI OAuth (Claude, Codex, Gemini, Antigravity) ở mức $0.00 miễn nhiễm cầu chì ngắt ví API trả phí, kèm bộ mức trần 1 chạm.",
+        "item2": "Nạp sẵn danh mục model giúp đổi model tức thì ngay từ màn hình Chat mới, thanh tiêu đề hội thoại và từng thành viên trong Team.",
+        "item3": "Mặc định khởi động sạch chuẩn en-US, đồng bộ đủ 14 ngôn ngữ chuẩn Unicode NFC và bảo vệ trọn vẹn bộ gõ Tiếng Việt Telex/VNI."
+      }
+    }
   }
 }

@@ -86,12 +86,53 @@ export interface SlotContextStatusDto {
     provider_id?: string;
     model_id: string;
   };
+  effective_compact_limit_tokens?: number;
+  wakeup_turns?: number;
+  input_tokens_total?: number;
+  output_tokens_total?: number;
+  cached_read_tokens_total?: number;
+  estimated_cost_usd?: number;
+  compaction_saved_tokens?: number;
 }
+
+export type TeamEconomyMode = 'lean' | 'balanced' | 'verbose';
+
+export type TeamQuotaPreset = 'smart_split' | 'all_free_cli';
 
 export interface TeamContextStatusResponse {
   team_id: string;
   auto_compact_enabled: boolean;
   auto_compact_threshold_pct: number;
+  economy_mode?: TeamEconomyMode;
+  max_context_tokens?: number;
+  tokens_saved_estimate?: number;
+  coalesced_wakes_saved?: number;
+  max_turn_hops_per_run?: number;
+  auto_fallback_free_cli?: boolean;
+  total_wakeup_turns?: number;
+  total_input_tokens?: number;
+  total_output_tokens?: number;
+  total_cached_read_tokens?: number;
+  total_estimated_cost_usd?: number;
+  slots: SlotContextStatusDto[];
+}
+
+export interface TeamContextUsageEvent {
+  user_id?: string;
+  team_id: string;
+  auto_compact_enabled: boolean;
+  auto_compact_threshold_pct?: number;
+  economy_mode?: TeamEconomyMode;
+  max_context_tokens?: number;
+  tokens_saved_estimate?: number;
+  coalesced_wakes_saved?: number;
+  max_turn_hops_per_run?: number;
+  auto_fallback_free_cli?: boolean;
+  total_wakeup_turns?: number;
+  total_input_tokens?: number;
+  total_output_tokens?: number;
+  total_cached_read_tokens?: number;
+  total_estimated_cost_usd?: number;
   slots: SlotContextStatusDto[];
 }
 
@@ -109,12 +150,18 @@ export interface CompactTeamContextRequest {
   slot_id?: string;
   mode?: 'auto' | 'rollover' | 'native' | 'prefs_only';
   auto_compact_enabled?: boolean;
+  economy_mode?: TeamEconomyMode;
+  max_context_tokens?: number;
   force_interrupt?: boolean;
 }
 
 export interface CompactTeamContextResponse {
   team_id: string;
   auto_compact_enabled: boolean;
+  economy_mode?: TeamEconomyMode;
+  max_context_tokens?: number;
+  tokens_saved_estimate?: number;
+  coalesced_wakes_saved?: number;
   outcomes: CompactSlotOutcomeDto[];
 }
 
@@ -123,9 +170,16 @@ export interface PerSlotModelUpdate {
   target: ModelTargetSpec;
 }
 
+export interface ApplyTeamQuotaPresetRequest {
+  team_id: string;
+  preset: TeamQuotaPreset;
+  force_interrupt?: boolean;
+}
+
 export interface SwitchTeamModelsRequest {
   team_id: string;
   scope?: 'all' | 'teammates_only' | 'slots';
+  preset?: TeamQuotaPreset;
   target?: ModelTargetSpec;
   updates?: PerSlotModelUpdate[];
   force_interrupt?: boolean;

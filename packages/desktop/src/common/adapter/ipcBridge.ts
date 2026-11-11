@@ -2287,6 +2287,7 @@ export const team = {
       name: p.name,
       agents: p.agents.map(toBackendAssistant),
       ...(p.workspace ? { workspace: p.workspace } : {}),
+      ...(p.workspace_mode ? { workspace_mode: p.workspace_mode } : {}),
     })),
     fromBackendTeam
   ),
@@ -2662,17 +2663,18 @@ export const wallets = {
 // ---------------------------------------------------------------------------
 
 import type {
+  ApplyTeamQuotaPresetRequest,
   CompactSlotOutcomeDto,
   CompactTeamContextRequest,
   CompactTeamContextResponse,
   ConnectedModelsCatalogDto,
   QuickCreateMemberRequest,
   QuickCreateMemberResponse,
-  SlotContextStatusDto,
   SwitchSlotModelOutcomeDto,
   SwitchTeamModelsRequest,
   SwitchTeamModelsResponse,
   TeamContextStatusResponse,
+  TeamContextUsageEvent,
 } from '../types/team/teamHubTypes';
 
 export const teamHub = {
@@ -2689,12 +2691,11 @@ export const teamHub = {
     (p) => `/api/team-hub/teams/${encodeURIComponent(p.team_id)}/switch-models`,
     ({ team_id: _id, ...rest }) => rest
   ),
-  contextUsageUpdated: wsEmitter<{
-    user_id?: string;
-    team_id: string;
-    auto_compact_enabled: boolean;
-    slots: SlotContextStatusDto[];
-  }>('team:context_usage'),
+  applyQuotaPreset: httpPost<SwitchTeamModelsResponse, ApplyTeamQuotaPresetRequest>(
+    (p) => `/api/team-hub/teams/${encodeURIComponent(p.team_id)}/apply-quota-preset`,
+    ({ team_id: _id, ...rest }) => rest
+  ),
+  contextUsageUpdated: wsEmitter<TeamContextUsageEvent>('team:context_usage'),
   contextCompacted: wsEmitter<{
     user_id?: string;
     team_id: string;

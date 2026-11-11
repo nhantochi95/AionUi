@@ -1,5 +1,41 @@
 # Changelog
 
+## [2.3.0](https://github.com/nhantochi95/AionUi/compare/v2.2.2...feat/hybrid-command-hub) (2026-11-11)
+
+### Desktop
+
+#### Features
+
+- **team:** live KV-Cache hit rate (`KV-Cache %`) and real `In / Cache / Out` token telemetry inside `TeamContextCompactPopover`
+- **team:** 1-click Quota Presets (`Unlimited CLI $0`, `Balanced $5`, `Strict $1`) and persistent `Workspace Mode` (`Shared` vs `Isolated Git Worktree`) in Team creation and settings
+- **shared-room:** multi-team Shared Rooms with `Chair-only` default routing (saving 50–67% token fan-out), `@all` explicit broadcast, and real-time hop profiler
+- **inbox:** unified Action Inbox for Worktree Squash Merge, Human-Only Done review, Max-Hops pause, Budget Warning, and 2-way `quota_fallback` approval synced with Telegram
+- **wallet:** Dual Cost Wallet header widget separating `$0.00` OAuth CLI subscriptions from paid API key circuit breakers
+- **models:** pre-seeded instant model switching (`ConnectedModelPickerPopover`) for Direct CLI backends (`Antigravity`, `Claude`, `Codex`) on `/guid`, chat headers, and Team slots
+- **release:** in-app `What's New` release notes dialog on version upgrade plus clickable `v2.3.0` version capsule in Titlebar, Sidebar footer, and `Settings -> About`
+- **i18n:** full 14-locale parity with strict `en-US` clean-boot default, 100% canonical Unicode NFC `vi-VN` localization, and Telex/VNI IME composition protection (`useCompositionInput`)
+
+#### Bug Fixes
+
+- **ui:** enforce opaque `bg-dialog-fill-0` surfaces on custom popovers and `shrink-0` / `w-full` layout guards on switches and progress bars
+
+### Core ([v0.3.0](https://github.com/nhantochi95/AionCore/tree/feat/hybrid-command-hub))
+
+#### Performance Improvements
+
+- **antigravity:** persistent JSON-RPC 2.0 `WarmAcpClient` (`agy acp`) keeping warm sessions alive across turns (`~3.15s` warm turn latency, `88.6%` KV-cache hit rate, zero cold-restart notices)
+- **antigravity:** pass `--include-default-customizations=false` for Team slots to strip global MCP/skill cold-boot overhead
+- **team:** eliminate phantom `IdleNotification -> RecoveryDrain` Lead wakes, coalesce parallel teammate reports (`1.5s / 4.5s` window), and compress Lead/Member system prompts (`-46.6%` / `-33.2%`)
+- **team:** add 1-shot atomic `reply_message` + `reply_files` on `team_task_update`, `team task create-batch`, trailing-8-hex short task IDs, `TaskBoardDigestCursor` (`-85.4%` board payload), and `.aionui/handoffs/<id>.md` file staging
+
+#### Features
+
+- **team:** durable SQLite `pending_handover` (`rearm_slot_handover`) and post-compaction `role_prompt` retention across 3-tier `160K` smart context compaction
+- **telemetry:** monotonic `_meta.seq` deduplication (`last_seen_meta_seq` + `cached_read_tokens_total`) across Antigravity, Codex, and Claude backends
+- **hub:** fork-safe `custom_*` SQLite schema (`0` bytes diff in upstream `migrations/`), `GitWorktreeEngine` 1-click Squash Merge, Human-Only Done guard, `DualCostWallet` `$0.00` 4-CLI subscription immunity, and atomic 2-way Telegram inline callback lock (`consume_action_token_once`)
+
+---
+
 ## [2.2.2](https://github.com/iOfficeAI/AionUi/compare/v2.2.1...v2.2.2) (2026-09-09)
 
 ### Desktop

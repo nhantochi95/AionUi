@@ -4,8 +4,12 @@ import type { RefInputType } from '@arco-design/web-react/es/Input/interface';
 import { Plus } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import { ipcBridge } from '@/common';
-import type { TeamAssistant, TTeam } from '@/common/types/team/teamTypes';
-import type { ModelTargetSpec, PerSlotModelUpdate } from '@/common/types/team/teamHubTypes';
+import type { TeamAssistant, TTeam, WorkspaceMode } from '@/common/types/team/teamTypes';
+import type {
+  ModelTargetSpec,
+  PerSlotModelUpdate,
+  TeamQuotaPreset,
+} from '@/common/types/team/teamHubTypes';
 import type { TeamAssistantInput } from '@/common/adapter/teamMapper';
 import { useAuth } from '@renderer/hooks/context/AuthContext';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
@@ -20,6 +24,8 @@ import TeamAssistantPickerDropdown from './memberPicker/TeamAssistantPickerDropd
 import TeamMemberDraftList, { type TeamMemberDraft } from './memberPicker/TeamMemberDraftList';
 import QuickCreateMemberInlineForm, { type QuickCreateMemberResult } from './modelHub/QuickCreateMemberInlineForm';
 import { getTeamHubBridge } from './modelHub/bridgeSafe';
+import { useConnectedModelsCatalog } from './modelHub/useConnectedModelsCatalog';
+import { resolveQuotaPresetTargets } from './modelHub/useTeamContextAndModels';
 
 // [E2E SYNC] 修改此组件的 DOM 结构（class、标题、关闭按钮等）时，
 // 必须同步更新 tests/e2e/cases/teams/team-create.e2e.ts、team-whitelist.e2e.ts、
@@ -83,10 +89,12 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
   const layout = useLayoutContext();
   const isMobile = layout?.isMobile ?? false;
   const { assistants: allAssistants } = useTeamAssistantOptions(i18n?.language ?? 'en-US');
+  const { catalog: connectedCatalog } = useConnectedModelsCatalog(visible);
   const [name, setName] = useState('');
   const [selectedMembers, setSelectedMembers] = useState<TeamMemberDraft[]>([]);
   const [leaderSelectionId, setLeaderSelectionId] = useState<string | undefined>(undefined);
   const [workspace, setWorkspace] = useState('');
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('shared');
   const [enableTelegramBridge, setEnableTelegramBridge] = useState(true);
   const [setTelegramDmDefault, setSetTelegramDmDefault] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -105,6 +113,7 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
     setSelectedMembers([]);
     setLeaderSelectionId(undefined);
     setWorkspace('');
+    setWorkspaceMode('shared');
     setEnableTelegramBridge(true);
     setSetTelegramDmDefault(false);
     setQuickCreateOpen(false);
@@ -159,6 +168,74 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
       );
     },
     [leaderSelectionId]
+  );
+
+  const handleApplyCreatePreset = useCallback(
+    (preset: TeamQuotaPreset) => {
+      const { leaderTarget, workerTarget } = resolveQuotaPresetTargets(connectedCatalog, preset);
+
+      if (selectedMembers.length === 0) {
+        if (allAssistants.length === 0) return;
+        const isCliBackend = (b?: string) =>
+          Boolean(b && /^(claude|codex|gemini|gemini-cli|antigravity)$/i.test(b));
+        const cliPool = allAssistants.filter((a) => isCliBackend(a.backend));
+        const leadAssistant =
+          (leaderTarget
+            ? allAssistants.find((a) => a.backend === leaderTarget.backend)
+            : undefined) ??
+          cliPool[0] ??
+          allAssistants[0];
+        const workerAssistant =
+          (workerTarget
+            ? allAssistants.find(
+                (a) => a.backend === workerTarget.backend && a.id !== leadAssistant.id
+              ) ?? allAssistants.find((a) => a.backend === workerTarget.backend)
+            : undefined) ??
+          cliPool.find((a) => a.id !== leadAssistant.id) ??
+          cliPool[0] ??
+          allAssistants[Math.min(1, allAssistants.length - 1)];
+
+        const now = Date.now();
+        const leadId = `${leadAssistant.id}-${now}-lead`;
+        const workerId = `${workerAssistant.id}-${now}-worker`;
+        setSelectedMembers([
+          {
+            selectionId: leadId,
+            assistant: leadAssistant,
+            modelOverride: leaderTarget,
+          },
+          {
+            selectionId: workerId,
+            assistant: workerAssistant,
+            modelOverride: workerTarget ?? leaderTarget,
+          },
+        ]);
+        setLeaderSelectionId(leadId);
+      } else {
+        const effectiveLeadId = leaderSelectionId ?? selectedMembers[0]?.selectionId;
+        if (!leaderSelectionId && effectiveLeadId) {
+          setLeaderSelectionId(effectiveLeadId);
+        }
+        setSelectedMembers((prev) =>
+          prev.map((member) => {
+            const isLead = member.selectionId === effectiveLeadId;
+            const target = isLead ? (leaderTarget ?? workerTarget) : (workerTarget ?? leaderTarget);
+            return target ? { ...member, modelOverride: target } : member;
+          })
+        );
+      }
+
+      Message.success(
+        preset === 'all_free_cli'
+          ? t('team.modelHub.presetAppliedFreeCli', {
+              defaultValue: 'Applied 100% $0 CLI preset',
+            })
+          : t('team.modelHub.presetAppliedSmartSplit', {
+              defaultValue: 'Applied Smart Split: Pro Lead + $0 CLI Workers',
+            })
+      );
+    },
+    [allAssistants, connectedCatalog, leaderSelectionId, selectedMembers, t]
   );
 
   const handleRemoveDraft = (selectionId: string) => {
@@ -220,7 +297,7 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
         user_id,
         name,
         workspace,
-        workspace_mode: 'shared',
+        workspace_mode: workspaceMode,
         agents,
       });
 
@@ -314,12 +391,44 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
         />
       </div>
 
+      <div className='text-13px font-500 leading-20px text-t-secondary'>
+        {t('team.create.workspaceModeLabel', { defaultValue: 'Isolation' })}
+      </div>
+      <div className='inline-flex items-center gap-4px p-3px rounded-8px bg-2 border border-solid border-b-base w-fit'>
+        <button
+          type='button'
+          data-testid='team-create-workspace-mode-shared'
+          aria-pressed={workspaceMode === 'shared'}
+          onClick={() => setWorkspaceMode('shared')}
+          className={`px-10px py-4px rounded-6px text-12px border-0 cursor-pointer transition-colors ${
+            workspaceMode === 'shared'
+              ? 'bg-1 text-[#165DFF] font-600 shadow-xs'
+              : 'bg-transparent text-t-secondary hover:text-t-primary'
+          }`}
+        >
+          {t('team.create.workspaceModeShared', { defaultValue: 'Shared Folder' })}
+        </button>
+        <button
+          type='button'
+          data-testid='team-create-workspace-mode-isolated'
+          aria-pressed={workspaceMode === 'isolated'}
+          onClick={() => setWorkspaceMode('isolated')}
+          className={`px-10px py-4px rounded-6px text-12px border-0 cursor-pointer transition-colors ${
+            workspaceMode === 'isolated'
+              ? 'bg-1 text-emerald-700 dark:text-emerald-300 font-600 shadow-xs'
+              : 'bg-transparent text-t-secondary hover:text-t-primary'
+          }`}
+        >
+          {t('team.create.workspaceModeIsolated', { defaultValue: 'Isolated Git Worktree' })}
+        </button>
+      </div>
+
       <div className='text-13px font-500 leading-20px text-t-secondary'>{t('team.create.telegramLabel')}</div>
       <div className='flex flex-wrap items-center gap-12px text-12px text-t-secondary'>
         <label className='inline-flex items-center gap-6px cursor-pointer select-none'>
           <Switch
             size='small'
-            className='aion-tg-switch'
+            className='shrink-0 aion-tg-switch'
             checked={enableTelegramBridge}
             onChange={setEnableTelegramBridge}
           />
@@ -329,13 +438,44 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
           <label className='inline-flex items-center gap-6px cursor-pointer select-none text-t-tertiary'>
             <Switch
               size='small'
-              className='aion-tg-switch'
+              className='shrink-0 aion-tg-switch'
               checked={setTelegramDmDefault}
               onChange={setSetTelegramDmDefault}
             />
             <span>{t('team.create.telegramActiveDmDefault')}</span>
           </label>
         )}
+      </div>
+    </div>
+  );
+
+  const quotaPresetBar = (
+    <div
+      data-testid='team-create-quota-presets'
+      className='mb-10px flex items-center justify-between gap-6px flex-wrap px-10px py-7px rounded-8px bg-2 border border-solid border-b-base'
+    >
+      <span className='text-11px font-600 text-t-secondary'>
+        {t('team.modelHub.quotaPresetsLabel', { defaultValue: '1-Click Quota Presets' })}
+      </span>
+      <div className='flex items-center gap-6px flex-wrap'>
+        <button
+          type='button'
+          data-testid='team-create-preset-smart-split'
+          onClick={() => handleApplyCreatePreset('smart_split')}
+          className='h-24px px-9px rounded-full text-11px font-600 border border-solid border-[#165DFF]/35 bg-[#165DFF]/10 hover:bg-[#165DFF]/18 text-[#165DFF] cursor-pointer transition-colors outline-none'
+        >
+          {t('team.modelHub.presetSmartSplit', {
+            defaultValue: 'Smart Split: Pro Lead + $0 CLI',
+          })}
+        </button>
+        <button
+          type='button'
+          data-testid='team-create-preset-free-cli'
+          onClick={() => handleApplyCreatePreset('all_free_cli')}
+          className='h-24px px-9px rounded-full text-11px font-600 border border-solid border-emerald-500/35 bg-emerald-500/10 hover:bg-emerald-500/18 text-emerald-700 dark:text-emerald-300 cursor-pointer transition-colors outline-none'
+        >
+          {t('team.modelHub.presetAllFreeCli', { defaultValue: '100% $0 CLI' })}
+        </button>
       </div>
     </div>
   );
@@ -369,21 +509,21 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
               defaultValue: `All assistants (${allAssistants.length})`,
             })}
           </div>
-          <Button
-            type='outline'
-            size='mini'
+          <button
+            type='button'
             data-testid='team-create-quick-member-btn'
             onClick={() => setQuickCreateOpen((v) => !v)}
-            className='!rounded-999px !px-10px !text-12px'
+            className='h-26px rounded-full px-10px text-12px font-500 bg-2 hover:bg-3 text-t-primary border border-solid border-b-base inline-flex items-center gap-4px cursor-pointer transition-colors outline-none shrink-0'
           >
             {t('team.modelHub.quickCreateBtn', { defaultValue: '+ Quick Create Member' })}
-          </Button>
+          </button>
         </div>
         {quickCreateToggleSection}
         {assistantPicker}
       </section>
 
       <section className='flex min-h-0 flex-col px-20px pb-14px pt-12px' data-testid='team-create-details-pane'>
+        {quotaPresetBar}
         <TeamMemberDraftList
           members={selectedMembers}
           leaderSelectionId={leaderSelectionId}
@@ -391,6 +531,7 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
           onRemove={handleRemoveDraft}
           onChangeMemberModel={handleChangeMemberModel}
           onBulkSetModel={handleBulkSetModel}
+          onApplyQuotaPreset={handleApplyCreatePreset}
         />
         <div className='mt-14px shrink-0 border-t border-border-2 pt-14px'>{teamFields}</div>
       </section>
@@ -440,6 +581,7 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
       {/* 窄屏无固定高度的父级：给成员列表框一个固定 max-height（同桌面思路），成员变多时框内滚动，
           团队字段区始终留在下方可见。 */}
       <section className='flex min-h-0 flex-col' data-testid='team-create-details-pane'>
+        {quotaPresetBar}
         {quickCreateToggleSection}
         <TeamMemberDraftList
           members={selectedMembers}
@@ -448,6 +590,7 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
           onRemove={handleRemoveDraft}
           onChangeMemberModel={handleChangeMemberModel}
           onBulkSetModel={handleBulkSetModel}
+          onApplyQuotaPreset={handleApplyCreatePreset}
           headerAction={addMemberDropdown}
           listBoxClassName='!max-h-[38vh]'
         />

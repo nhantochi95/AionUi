@@ -92,5 +92,44 @@
       "promise4": "Le dépôt open source reste activement maintenu, les fonctionnalités clés restent synchronisées, l'esprit open source demeure.",
       "noRush": "Si vous préférez attendre, la version actuelle continue de fonctionner normalement — elle ne recevra simplement plus de mises à jour. En revanche, dès votre première connexion à la nouvelle version, vos données locales y ont déjà été transférées : utilisez alors la nouvelle version comme point d'accès quotidien."
     }
+  },
+  "whatsNew": {
+    "capsule": "v{{version}}",
+    "capsuleTooltip": "What's new in v{{version}}",
+    "buttonLabel": "What's New",
+    "title": "What's New in AionUi v{{version}}",
+    "subtitle": "Core Engine v0.3.0 · Released 2026-11-11",
+    "gotIt": "Got it",
+    "viewFullChangelog": "Full Changelog on GitHub",
+    "sections": {
+      "warmAcp": {
+        "badge": "Speed & KV-Cache",
+        "title": "Warm ACP Session & 3.1s Team Turn Response",
+        "item1": "Persistent JSON-RPC 2.0 WarmAcpClient keeps Antigravity sessions alive across turns (zero cold restarts, 88.6% KV-cache hit rate).",
+        "item2": "Team slots strip unused global customizations (--include-default-customizations=false) to cut startup latency.",
+        "item3": "Live In / Cache / Out token counters and KV-Cache % badge inside the Team Context Compact popover."
+      },
+      "teamToken": {
+        "badge": "-76% Token Burn",
+        "title": "1-Shot Atomic Task Board & Wake Coalescing",
+        "item1": "Eliminated phantom idle Lead wakes and added 1.5s / 4.5s parallel teammate wake coalescing.",
+        "item2": "1-shot atomic team_task_update (reply_message + reply_files), create-batch, 8-char short task IDs, and TaskBoardDigestCursor (-85.4% board payload).",
+        "item3": "Durable SQLite handover and post-compaction role_prompt retention across 3-tier 160K smart context compaction."
+      },
+      "hybridHub": {
+        "badge": "Multi-Team Hub",
+        "title": "Shared Rooms, Isolated Git Worktrees & Action Inbox",
+        "item1": "Multi-team Shared Rooms default to Chair-only routing (saving 50-67% fan-out tokens) with @all broadcast and hop profiler.",
+        "item2": "Isolated Git Worktrees with 1-click Squash Merge and strict Human-Only Done task guard.",
+        "item3": "2-way Action Inbox synced with Telegram inline buttons via atomic single-use decision locks."
+      },
+      "walletI18n": {
+        "badge": "Quota & UX",
+        "title": "Dual Cost Wallet ($0 CLI Immunity) & 14-Locale Polish",
+        "item1": "OAuth CLI subscriptions (Claude, Codex, Gemini, Antigravity) stay $0.00 and immune to paid API circuit breakers, with 1-click Quota Presets.",
+        "item2": "Pre-seeded instant model switching across New Chat, Conversation Header, and Team slots.",
+        "item3": "Clean en-US default boot, full 14-locale Unicode NFC parity, and Telex/VNI IME composition protection."
+      }
+    }
   }
 }

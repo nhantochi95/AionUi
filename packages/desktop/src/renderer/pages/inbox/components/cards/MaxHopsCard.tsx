@@ -61,7 +61,12 @@ export const MaxHopsCard: React.FC<MaxHopsCardProps> = ({
         <div className='flex items-center gap-6px'>
           <Tag color='gold' size='small' className='flex items-center gap-4px'>
             <AlarmClock size='12' />
-            <span>{currentHops} / {maxHops} hops</span>
+            <span>
+              {t('team.actionInbox.maxHops.hopsCount', '{{current}} / {{max}} hops', {
+                current: currentHops,
+                max: maxHops,
+              })}
+            </span>
           </Tag>
           <span className='text-t-secondary text-11px'>
             {t('team.actionInbox.maxHops.desc', 'Autonomous discussion rounds reached limit')}

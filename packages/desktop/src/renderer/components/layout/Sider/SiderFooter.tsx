@@ -11,6 +11,9 @@ import { ArrowCircleLeft, CloseOne, Moon, SettingTwo, SunOne } from '@icon-park/
 import classNames from 'classnames';
 import { iconColors } from '@renderer/styles/colors';
 import type { SiderTooltipProps } from '@renderer/utils/ui/siderTooltip';
+import { openWhatsNewDialog } from '@/renderer/components/settings/WhatsNewDialog';
+
+declare const __APP_VERSION__: string;
 
 interface SiderFooterProps {
   isMobile: boolean;
@@ -36,6 +39,7 @@ const SiderFooter: React.FC<SiderFooterProps> = ({
   onLogoutClick,
 }) => {
   const { t } = useTranslation();
+  const appVersion = typeof __APP_VERSION__ === 'string' && __APP_VERSION__.trim() ? __APP_VERSION__.trim() : '2.3.0';
 
   const settingsIcon = isSettings ? (
     <ArrowCircleLeft
@@ -124,6 +128,25 @@ const SiderFooter: React.FC<SiderFooterProps> = ({
                 )}
               </span>
             </div>
+          </Tooltip>
+        )}
+        {!collapsed && (
+          <Tooltip
+            {...siderTooltipProps}
+            content={t('update.whatsNew.capsuleTooltip', {
+              version: appVersion,
+              defaultValue: `What's new in v${appVersion}`,
+            })}
+            position='top'
+          >
+            <button
+              type='button'
+              data-testid='sider-whats-new-btn'
+              onClick={openWhatsNewDialog}
+              className='shrink-0 h-24px px-8px rd-999px border border-solid border-[var(--color-border-2)] bg-fill-2 text-t-secondary hover:text-[rgb(var(--primary-6))] hover:border-[rgba(var(--primary-6),0.35)] hover:bg-[rgba(var(--primary-6),0.1)] text-11px font-600 leading-none cursor-pointer transition-colors'
+            >
+              v{appVersion}
+            </button>
           </Tooltip>
         )}
       </div>

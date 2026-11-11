@@ -74,8 +74,12 @@ const TeamAssistantPickerDropdown: React.FC<Props> = ({
       popup={() => (
         <div
           data-testid={panelTestId}
-          className={`flex ${topSlot ? 'max-h-[min(520px,80vh)] w-300px' : 'max-h-[min(360px,60vh)] w-260px'} min-h-0 flex-col rounded-10px border border-solid border-3 bg-dialog-fill-0 p-8px shadow-[0_4px_12px_rgba(0,0,0,0.1)]`}
-          style={{ zIndex: 10020 }}
+          className={`flex ${topSlot ? 'max-h-[min(520px,80vh)] w-260px' : 'max-h-[min(360px,60vh)] w-260px'} min-h-0 flex-col rounded-10px border border-solid border-b-base bg-dialog-fill-0 p-8px shadow-[0_12px_32px_rgba(0,0,0,0.18)]`}
+          style={{
+            zIndex: 10020,
+            backgroundColor: 'var(--dialog-fill-0, var(--bg-1, #ffffff))',
+            borderColor: 'var(--border-base, #e5e6eb)',
+          }}
         >
           {title ? (
             <div

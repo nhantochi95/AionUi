@@ -119,7 +119,7 @@ describe('F22: Action Inbox Triage Interface & Sider Navigation', () => {
       expect(screen.getByText('+142')).toBeInTheDocument();
       expect(screen.getByText('-37')).toBeInTheDocument();
 
-      const approveBtn = screen.getByText('✓ Approve & Merge');
+      const approveBtn = screen.getByText('Approve & Merge');
       expect(approveBtn).not.toBeDisabled();
       fireEvent.click(approveBtn);
       expect(handleResolve).toHaveBeenCalledWith('inbox_card_wt_1', 'approve');
@@ -138,7 +138,7 @@ describe('F22: Action Inbox Triage Interface & Sider Navigation', () => {
       const cardEl = screen.getByTestId('inbox-card-inbox_card_wt_1');
       expect(cardEl).toHaveStyle({ opacity: 0.48 });
       expect(screen.getByText('✓ Resolved')).toBeInTheDocument();
-      const approveBtn = screen.getByText('✓ Approve & Merge').closest('button');
+      const approveBtn = screen.getByText('Approve & Merge').closest('button');
       expect(approveBtn).toBeDisabled();
     });
 

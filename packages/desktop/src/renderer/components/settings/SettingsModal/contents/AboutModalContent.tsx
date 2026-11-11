@@ -17,6 +17,7 @@ import { getIncludePrerelease, runUpdateCheck } from '@/renderer/components/sett
 import { UPDATE_AVAILABLE_EVENT } from '@/renderer/components/settings/useUpdateNotificationController';
 import { IS_DISCONTINUED_BUILD } from '@/renderer/utils/discontinuedBuild';
 import { OPEN_MIGRATION_DIALOG_EVENT } from '@/renderer/components/settings/UpdateMigrationDialog';
+import { openWhatsNewDialog } from '@/renderer/components/settings/WhatsNewDialog';
 import {
   getUpdateReadyState,
   setUpdateReadyState,
@@ -117,7 +118,7 @@ const AboutModalContent: React.FC = () => {
     },
     {
       title: t('settings.updateLog'),
-      url: 'https://github.com/iOfficeAI/AionUi/releases',
+      onClick: () => openWhatsNewDialog(),
       icon: <Right theme='outline' size='16' className='rtl-mirror' />,
     },
     {
@@ -156,13 +157,21 @@ const AboutModalContent: React.FC = () => {
               {t('settings.appDescription')}
             </Typography.Text>
             <div className='flex items-center justify-center gap-8px mb-16px'>
-              <span className='px-10px py-4px rd-6px text-13px bg-fill-2 text-t-primary font-500'>
-                v{__APP_VERSION__}
-              </span>
+              <button
+                type='button'
+                data-testid='about-version-whats-new-btn'
+                onClick={openWhatsNewDialog}
+                className='px-10px py-4px rd-6px text-13px bg-fill-2 hover:bg-[rgba(var(--primary-6),0.12)] text-t-primary hover:text-[rgb(var(--primary-6))] font-500 border border-solid border-transparent hover:border-[rgba(var(--primary-6),0.35)] cursor-pointer transition-colors inline-flex items-center gap-6px'
+              >
+                <span>v{__APP_VERSION__}</span>
+                <span className='text-11px font-600 text-[rgb(var(--primary-6))]'>
+                  · {t('update.whatsNew.buttonLabel', { defaultValue: "What's New" })}
+                </span>
+              </button>
               <div
                 className='text-t-primary cursor-pointer hover:text-t-secondary transition-colors p-4px'
                 onClick={() =>
-                  openLink('https://github.com/iOfficeAI/AionUi').catch((error) =>
+                  openLink('https://github.com/nhantochi95/AionUi').catch((error) =>
                     console.error('Failed to open link:', error)
                   )
                 }
@@ -189,11 +198,16 @@ const AboutModalContent: React.FC = () => {
                         ? t('settings.checkingForUpdates')
                         : t('settings.checkForUpdates')}
                 </Button>
-                <div className='flex items-center justify-between w-full'>
+                <div className='flex items-center justify-between gap-8px w-full'>
                   <Typography.Text className='text-12px text-t-secondary'>
                     {t('settings.includePrereleaseUpdates')}
                   </Typography.Text>
-                  <Switch size='small' checked={includePrerelease} onChange={handlePrereleaseChange} />
+                  <Switch
+                    size='small'
+                    className='shrink-0'
+                    checked={includePrerelease}
+                    onChange={handlePrereleaseChange}
+                  />
                 </div>
               </div>
             )}

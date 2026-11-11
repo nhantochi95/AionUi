@@ -422,7 +422,7 @@ describe('Adversarial Challenge 3: RoundedPillComposer & IME Telex Protection', 
     expect(handleSend).toHaveBeenCalledWith(
       expect.objectContaining({
         content: 'Thông điệp gửi bằng nút tròn',
-        wokenTargets: ['Backend Lead', 'Frontend Lead', 'QA Specialist'],
+        wokenTargets: ['Backend Lead'],
         liveSteering: true,
       })
     );
@@ -431,7 +431,7 @@ describe('Adversarial Challenge 3: RoundedPillComposer & IME Telex Protection', 
     expect(input).toHaveValue('');
   });
 
-  it('challenge wake chips: adding, muting, and unmuting agent chips', () => {
+  it('challenge wake chips: Chair-only default, Wake All, muting, and unmuting agent chips', () => {
     const handleSend = vi.fn();
     render(
       <RoundedPillComposer
@@ -442,7 +442,13 @@ describe('Adversarial Challenge 3: RoundedPillComposer & IME Telex Protection', 
       />
     );
 
-    // All 3 chips present initially
+    // Chair-only active initially (1/3)
+    expect(screen.getByTestId('wake-chip-Backend Lead')).toBeInTheDocument();
+    expect(screen.queryByTestId('wake-chip-Frontend Lead')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('wake-chip-QA Specialist')).not.toBeInTheDocument();
+
+    // Wake All activates all 3 chips
+    fireEvent.click(screen.getByTestId('wake-all-btn'));
     expect(screen.getByTestId('wake-chip-Backend Lead')).toBeInTheDocument();
     expect(screen.getByTestId('wake-chip-Frontend Lead')).toBeInTheDocument();
     expect(screen.getByTestId('wake-chip-QA Specialist')).toBeInTheDocument();
@@ -477,11 +483,11 @@ describe('Adversarial Challenge 3: RoundedPillComposer & IME Telex Protection', 
     );
 
     const toggle = screen.getByTestId('live-steering-toggle');
-    expect(toggle).toHaveTextContent('⚡ Live steering: Active');
+    expect(toggle).toHaveTextContent('Live steering: Active');
 
     // Toggle off
     fireEvent.click(toggle);
-    expect(toggle).toHaveTextContent('⚡ Live steering: Off');
+    expect(toggle).toHaveTextContent('Live steering: Off');
 
     // Send message with steering off
     const input = screen.getByTestId('rounded-pill-input');

@@ -84,6 +84,7 @@ const ActivityControlBar: React.FC<Props> = ({ value, onChange, members }) => {
       <label className='flex items-center gap-6px text-12px text-[color:var(--color-text-2)] select-none'>
         <Switch
           size='small'
+          className='shrink-0'
           checked={value.showSystemMessages}
           onChange={(checked) => patch({ showSystemMessages: checked })}
           data-testid='activity-show-system'
@@ -94,6 +95,7 @@ const ActivityControlBar: React.FC<Props> = ({ value, onChange, members }) => {
       <label className='flex items-center gap-6px text-12px text-[color:var(--color-text-2)] select-none'>
         <Switch
           size='small'
+          className='shrink-0'
           checked={value.showTerminalTasks}
           onChange={(checked) => patch({ showTerminalTasks: checked })}
           data-testid='activity-show-terminal'

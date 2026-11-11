@@ -115,9 +115,15 @@ export const QuickCreateMemberInlineForm: React.FC<QuickCreateMemberInlineFormPr
     void handleSubmit();
   });
 
-  const handlePromptKeyDown = promptComposition.createKeyDownHandler(() => {
-    void handleSubmit();
-  });
+  const handlePromptKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (promptComposition.isComposing.current || e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) {
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      void handleSubmit();
+    }
+  };
 
   return (
     <div

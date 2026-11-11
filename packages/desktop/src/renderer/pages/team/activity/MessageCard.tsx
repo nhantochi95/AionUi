@@ -24,6 +24,37 @@ type Props = {
   identity: ActivityIdentityResolver;
 };
 
+export type ResultDigestStatus = 'DONE' | 'DONE_WITH_CONCERNS' | 'BLOCKED' | 'NEEDS_CONTEXT';
+
+const DIGEST_TAG_COLOR: Record<ResultDigestStatus, string> = {
+  DONE: 'green',
+  DONE_WITH_CONCERNS: 'gold',
+  BLOCKED: 'orangered',
+  NEEDS_CONTEXT: 'arcoblue',
+};
+
+const DIGEST_FALLBACK_LABEL: Record<ResultDigestStatus, string> = {
+  DONE: 'Done',
+  DONE_WITH_CONCERNS: 'Done w/ Concerns',
+  BLOCKED: 'Blocked',
+  NEEDS_CONTEXT: 'Needs Context',
+};
+
+export function extractResultDigestStatus(text: string | undefined | null): ResultDigestStatus | null {
+  if (!text) return null;
+  const match = text.match(
+    /(?:(?:^|\n)\s*(?:Status|Result|Outcome)\s*:\s*|\[)(DONE_WITH_CONCERNS|NEEDS_CONTEXT|BLOCKED|DONE)(?:\]|\b)/i
+  );
+  if (match?.[1]) {
+    return match[1].toUpperCase() as ResultDigestStatus;
+  }
+  const leadingMatch = text.match(/^\s*(DONE_WITH_CONCERNS|NEEDS_CONTEXT|BLOCKED|DONE)\s*(?::|-|\n|$)/i);
+  if (leadingMatch?.[1]) {
+    return leadingMatch[1].toUpperCase() as ResultDigestStatus;
+  }
+  return null;
+}
+
 const MemberChip: React.FC<{ name: string; color: string }> = ({ name, color }) => (
   <span className='inline-flex items-center gap-4px min-w-0'>
     <span className='inline-block w-8px h-8px rounded-full shrink-0' style={{ backgroundColor: color }} />
@@ -48,6 +79,7 @@ const MessageCard: React.FC<Props> = ({ message, identity }) => {
       : identity.nameOf(message.to_agent_id);
 
   const body = message.summary && message.summary.length > 0 ? message.summary : message.content;
+  const digestStatus = extractResultDigestStatus(body) ?? extractResultDigestStatus(message.content);
   const attachments = message.files?.length ?? 0;
   const isClamped = useIsClamped(bodyRef, [body, expanded]);
   const time = formatActivityTime(message.created_at);
@@ -70,6 +102,18 @@ const MessageCard: React.FC<Props> = ({ message, identity }) => {
           <MemberChip name={toName} color={identity.colorOf(message.to_agent_id)} />
         )}
         <span className='ms-auto flex items-center gap-6px'>
+          {digestStatus && (
+            <Tag
+              size='small'
+              color={DIGEST_TAG_COLOR[digestStatus]}
+              data-testid='message-digest-status'
+              data-digest-status={digestStatus}
+            >
+              {t(`team.activity.digest.${digestStatus}`, {
+                defaultValue: DIGEST_FALLBACK_LABEL[digestStatus],
+              })}
+            </Tag>
+          )}
           {isSystemMessageType(message.msg_type) && (
             <Tag size='small' color='gray'>
               {t(`team.activity.msgType.${message.msg_type}`, { defaultValue: message.msg_type })}

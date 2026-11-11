@@ -111,11 +111,19 @@ describe('F21: Hoisted 380px Preview & 2-Lane Profiler Panel', () => {
     // Dual wallet cards
     expect(screen.getByTestId('wallet-cli-card')).toBeInTheDocument();
     expect(screen.getByTestId('wallet-api-card')).toBeInTheDocument();
-    expect(screen.getByText(/Claude Max \/ Codex CLI/)).toBeInTheDocument();
+    expect(screen.getByText(/Direct OAuth CLI engines/)).toBeInTheDocument();
   });
 
   it('renders diff viewer in Diff subtab and executes one-click squash merge CTA', async () => {
     const handleMergeSuccess = vi.fn();
+    vi.mocked(worktrees.getDiff.invoke).mockResolvedValue({
+      branch_name: 'wt/auth-fix',
+      base_branch: 'main',
+      files_changed: 2,
+      additions: 24,
+      deletions: 4,
+      patch: 'diff --git a/src/index.ts b/src/index.ts\n+export const ok = true;\n',
+    } as any);
     vi.mocked(worktrees.merge.invoke).mockResolvedValue({
       success: true,
       merged_commit: 'abc1234',
@@ -132,11 +140,13 @@ describe('F21: Hoisted 380px Preview & 2-Lane Profiler Panel', () => {
     );
 
     expect(screen.getByTestId('git-diff-viewer')).toBeInTheDocument();
-    expect(screen.getByTestId('mock-diff2html')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId('mock-diff2html')).toBeInTheDocument();
+    });
 
     // Squash merge CTA
     const mergeBtn = screen.getByTestId('squash-merge-btn');
-    expect(mergeBtn).toBeInTheDocument();
+    expect(mergeBtn).not.toBeDisabled();
 
     fireEvent.click(mergeBtn);
 
@@ -147,6 +157,49 @@ describe('F21: Hoisted 380px Preview & 2-Lane Profiler Panel', () => {
 
     // Check button transitions to merged state
     expect(screen.getByText(/Branch already merged into main/)).toBeInTheDocument();
+  });
+
+  it('shows clean empty diff state when no worktree lease exists and does not fake merge success on error', async () => {
+    const handleMergeSuccess = vi.fn();
+    const { unmount } = render(
+      <HoistedPreviewPanel open={true} onClose={vi.fn()} roomName='clean-room' onMergeSuccess={handleMergeSuccess} />
+    );
+
+    // Without worktreeLeaseId or task, defaults to Profiler subtab with zero bogus getDiff calls
+    expect(screen.getByTestId('two-lane-profiler')).toBeInTheDocument();
+    expect(worktrees.getDiff.invoke).not.toHaveBeenCalled();
+
+    // Switching to Diff shows empty state and disabled merge button (never fake jwt.ts)
+    fireEvent.click(screen.getByTestId('subtab-diff'));
+    expect(screen.getByTestId('git-diff-empty-state')).toBeInTheDocument();
+    expect(screen.queryByText(/jwt\.ts/)).not.toBeInTheDocument();
+    expect(screen.getByTestId('squash-merge-btn').closest('button')).toBeDisabled();
+    unmount();
+
+    // When merge fails, onMergeSuccess must NOT be called
+    vi.mocked(worktrees.getDiff.invoke).mockResolvedValue({
+      branch_name: 'wt/real',
+      base_branch: 'main',
+      files_changed: 1,
+      additions: 3,
+      deletions: 1,
+      patch: 'diff --git a/f.ts b/f.ts\n+real\n',
+    } as any);
+    vi.mocked(worktrees.merge.invoke).mockRejectedValueOnce(new Error('Merge conflict'));
+
+    render(
+      <HoistedPreviewPanel
+        open={true}
+        onClose={vi.fn()}
+        worktreeLeaseId='wt-conflict-1'
+        roomName='clean-room'
+        onMergeSuccess={handleMergeSuccess}
+      />
+    );
+    await waitFor(() => expect(screen.getByTestId('mock-diff2html')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('squash-merge-btn'));
+    await waitFor(() => expect(worktrees.merge.invoke).toHaveBeenCalledWith({ id: 'wt-conflict-1' }));
+    expect(handleMergeSuccess).not.toHaveBeenCalled();
   });
 
   it('switches to Xem thử subtab and shows task artifacts preview', () => {

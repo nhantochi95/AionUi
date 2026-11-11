@@ -5,10 +5,15 @@ import { Exchange, Lightning, Tool } from '@icon-park/react';
 import classNames from 'classnames';
 import useSWR from 'swr';
 import { wallets } from '@/common/adapter/ipcBridge';
-import type { ModelTargetSpec, TeamContextStatusResponse } from '@/common/types/team/teamHubTypes';
+import type {
+  ModelTargetSpec,
+  TeamContextStatusResponse,
+  TeamQuotaPreset,
+} from '@/common/types/team/teamHubTypes';
 import ConnectedModelPickerPopover, {
   type ModelPickerSelectionMeta,
 } from '@/renderer/pages/team/components/modelHub/ConnectedModelPickerPopover';
+import { useConnectedModelsCatalog } from '@/renderer/pages/team/components/modelHub/useConnectedModelsCatalog';
 import {
   resolveSlotContextLevel,
   useTeamContextAndModels,
@@ -25,15 +30,16 @@ export interface TwoLaneProfilerProps {
 }
 
 export const TwoLaneProfiler: React.FC<TwoLaneProfilerProps> = ({
-  modelTimeSec = 26.0,
-  toolTimeSec = 22.2,
-  totalTimeSec = 48.2,
+  modelTimeSec = 0,
+  toolTimeSec = 0,
+  totalTimeSec = 0,
   showWalletCards = true,
   teamId,
   roomTeams,
   initialContextStatus,
 }) => {
   const { t } = useTranslation();
+  const { catalog, cliSubscriptionGroups } = useConnectedModelsCatalog();
 
   const [selectedTeamId, setSelectedTeamId] = useState<string | undefined>(
     teamId ?? roomTeams?.[0]?.team_id ?? initialContextStatus?.team_id
@@ -57,6 +63,7 @@ export const TwoLaneProfiler: React.FC<TwoLaneProfilerProps> = ({
     compactTeam,
     toggleAutoCompact,
     switchModels,
+    applyQuotaPreset,
   } = useTeamContextAndModels(effectiveTeamId, initialContextStatus);
 
   const { data: walletData, mutate: mutateWallet } = useSWR(
@@ -104,6 +111,25 @@ export const TwoLaneProfiler: React.FC<TwoLaneProfilerProps> = ({
     [switchModels, t]
   );
 
+  const handleApplyPreset = useCallback(
+    async (preset: TeamQuotaPreset, forceInterrupt: boolean) => {
+      try {
+        const res = await applyQuotaPreset(preset, catalog, forceInterrupt);
+        const count = res?.outcomes?.length ?? 1;
+        Message.success(
+          t('team.modelHub.switchModelsSuccess', 'Updated models for {{count}} member(s)', { count })
+        );
+      } catch (err) {
+        Message.error(
+          t('team.modelHub.switchModelsFailed', 'Failed to switch models: {{error}}', {
+            error: String(err),
+          })
+        );
+      }
+    },
+    [applyQuotaPreset, catalog, t]
+  );
+
   const handleSlotSwitchModel = useCallback(
     async (slotId: string, target: ModelTargetSpec, meta: ModelPickerSelectionMeta) => {
       try {
@@ -145,14 +171,28 @@ export const TwoLaneProfiler: React.FC<TwoLaneProfilerProps> = ({
     [compactTeam, t]
   );
 
-  const apiSpent = walletData?.api_key_spent_usd ?? 1.4;
+  const apiSpent = walletData?.api_key_spent_usd ?? 0;
   const apiLimit = walletData?.api_key_budget_limit_usd ?? 5.0;
-  const cliRuns = walletData?.cli_subscription_runs ?? 38;
+  const cliRuns = walletData?.cli_subscription_runs ?? 0;
   const apiPercent = Math.min(100, Math.round((apiSpent / (apiLimit || 1)) * 100));
 
-  const total = modelTimeSec + toolTimeSec || 1;
-  const modelPct = Math.round((modelTimeSec / total) * 100);
-  const toolPct = 100 - modelPct;
+  const cliEnginesSummary = React.useMemo(() => {
+    if (cliSubscriptionGroups.length > 0) {
+      return cliSubscriptionGroups.map((g) => g.title).join(' / ');
+    }
+    const cliBackends = Array.from(
+      new Set(slots.filter((s) => s.wallet_type === 'cli_subscription').map((s) => s.backend))
+    );
+    if (cliBackends.length > 0) {
+      return cliBackends.join(' / ');
+    }
+    return t('team.sharedRoom.preview.profiler.noCliEnginesYet', 'Direct OAuth CLI engines');
+  }, [cliSubscriptionGroups, slots, t]);
+
+  const effectiveTotalSec = totalTimeSec > 0 ? totalTimeSec : modelTimeSec + toolTimeSec;
+  const laneSum = modelTimeSec + toolTimeSec;
+  const modelPct = laneSum > 0 ? Math.round((modelTimeSec / laneSum) * 100) : 0;
+  const toolPct = Math.max(0, 100 - modelPct);
 
   return (
     <div
@@ -167,7 +207,7 @@ export const TwoLaneProfiler: React.FC<TwoLaneProfilerProps> = ({
           </span>
           <Tag color='arcoblue' size='small' className='font-mono font-bold'>
             {t('team.sharedRoom.preview.profiler.totalTurnaround', 'Total Turnaround: {{time}}s', {
-              time: totalTimeSec.toFixed(1),
+              time: effectiveTotalSec.toFixed(1),
             })}
           </Tag>
         </div>
@@ -175,16 +215,16 @@ export const TwoLaneProfiler: React.FC<TwoLaneProfilerProps> = ({
         {/* Track 1: Model Lane */}
         <div className='flex flex-col gap-4px'>
           <div className='flex items-center justify-between text-11px text-t-secondary'>
-            <span className='flex items-center gap-4px font-medium'>
-              <Lightning theme='filled' size='12' className='text-purple-500' />
-              {t('team.sharedRoom.preview.profiler.modelLane', '🧠 Model Latency')}
+            <span className='flex items-center gap-5px font-medium'>
+              <Lightning theme='filled' size='12' className='text-purple-500 shrink-0' />
+              <span>{t('team.sharedRoom.preview.profiler.modelLane', 'Model Latency')}</span>
             </span>
             <span className='font-mono'>{modelTimeSec.toFixed(1)}s ({modelPct}%)</span>
           </div>
-          <div className='h-8px rd-full bg-fill-3 overflow-hidden'>
+          <div className='h-8px rounded-full bg-3 overflow-hidden'>
             <div
               data-testid='profiler-model-lane'
-              className='h-full bg-purple-500 rd-full transition-all'
+              className='h-full bg-purple-500 rounded-full transition-all'
               style={{ width: `${modelPct}%` }}
             />
           </div>
@@ -193,16 +233,16 @@ export const TwoLaneProfiler: React.FC<TwoLaneProfilerProps> = ({
         {/* Track 2: Tool / CLI Lane */}
         <div className='flex flex-col gap-4px'>
           <div className='flex items-center justify-between text-11px text-t-secondary'>
-            <span className='flex items-center gap-4px font-medium'>
-              <Tool theme='outline' size='12' className='text-cyan-600' />
-              {t('team.sharedRoom.preview.profiler.toolLane', '🛠️ Tool / CLI Latency')}
+            <span className='flex items-center gap-5px font-medium'>
+              <Tool theme='outline' size='12' className='text-cyan-600 shrink-0' />
+              <span>{t('team.sharedRoom.preview.profiler.toolLane', 'Tool / CLI Latency')}</span>
             </span>
             <span className='font-mono'>{toolTimeSec.toFixed(1)}s ({toolPct}%)</span>
           </div>
-          <div className='h-8px rd-full bg-fill-3 overflow-hidden'>
+          <div className='h-8px rounded-full bg-3 overflow-hidden'>
             <div
               data-testid='profiler-tool-lane'
-              className='h-full bg-cyan-500 rd-full transition-all'
+              className='h-full bg-cyan-500 rounded-full transition-all'
               style={{ width: `${toolPct}%` }}
             />
           </div>
@@ -231,7 +271,7 @@ export const TwoLaneProfiler: React.FC<TwoLaneProfilerProps> = ({
                 </Tag>
               </div>
               <div className='text-11px text-t-secondary'>
-                {t('team.sharedRoom.preview.profiler.runsCount', '{{count}} runs', { count: cliRuns })} • Claude Max / Codex CLI
+                {t('team.sharedRoom.preview.profiler.runsCount', '{{count}} runs', { count: cliRuns })} • {cliEnginesSummary}
               </div>
             </div>
 
@@ -248,11 +288,14 @@ export const TwoLaneProfiler: React.FC<TwoLaneProfilerProps> = ({
                   ${apiSpent.toFixed(2)} / ${apiLimit.toFixed(2)}
                 </span>
               </div>
-              <Progress
-                percent={apiPercent}
-                status={apiPercent >= 100 ? 'error' : apiPercent >= 80 ? 'warning' : 'normal'}
-                size='small'
-              />
+              <div className='w-full'>
+                <Progress
+                  percent={apiPercent}
+                  status={apiPercent >= 100 ? 'error' : apiPercent >= 80 ? 'warning' : 'normal'}
+                  size='small'
+                  style={{ width: '100%' }}
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -262,36 +305,38 @@ export const TwoLaneProfiler: React.FC<TwoLaneProfilerProps> = ({
       {showContextSection && (
         <div
           data-testid='profiler-context-health'
-          className='flex flex-col gap-10px p-12px rd-10px bg-fill-2 border border-solid border-arco-2'
+          className='flex flex-col gap-10px p-14px rounded-10px bg-2 border border-solid border-b-base'
         >
           <div className='flex flex-wrap items-center justify-between gap-8px'>
-            <span className='font-bold text-t-primary'>
+            <span className='font-bold text-t-primary text-13px'>
               {t('team.modelHub.contextHealthTitle', 'Context Window Health')}
             </span>
             <div className='flex items-center gap-8px flex-wrap'>
-              <label className='inline-flex items-center gap-5px text-11px text-t-secondary cursor-pointer select-none'>
+              <label className='inline-flex items-center gap-6px px-8px h-26px rounded-6px bg-1 border border-solid border-b-base text-11px text-t-secondary cursor-pointer select-none'>
                 <Switch
                   size='small'
+                  className='shrink-0'
                   data-testid='profiler-auto-compact-switch'
                   checked={autoCompactEnabled}
                   onChange={(val) => void toggleAutoCompact(val)}
                 />
-                <span>
+                <span className='whitespace-nowrap'>
                   {t('team.modelHub.autoCompactLabel', 'Auto-Compact at {{threshold}}%', {
                     threshold: autoCompactThresholdPct,
                   })}
                 </span>
               </label>
 
-              <Button
-                size='mini'
-                type='secondary'
+              <button
+                type='button'
                 data-testid='profiler-compact-all-btn'
-                loading={compacting}
+                disabled={compacting}
                 onClick={() => void handleCompactSlot(undefined)}
+                className='h-26px px-10px rounded-6px bg-1 hover:bg-3 border border-solid border-b-base text-11px font-500 text-t-primary inline-flex items-center gap-5px cursor-pointer transition-colors outline-none disabled:opacity-50'
               >
-                {t('team.modelHub.compactBtn', 'Compact Context')}
-              </Button>
+                <Lightning theme='outline' size='12' fill='currentColor' className='shrink-0' />
+                <span>{t('team.modelHub.compactBtn', 'Compact Context')}</span>
+              </button>
 
               <ConnectedModelPickerPopover
                 disabled={switchingModels}
@@ -302,22 +347,23 @@ export const TwoLaneProfiler: React.FC<TwoLaneProfilerProps> = ({
                 onSelectTeamId={setSelectedTeamId}
                 panelTestId='profiler-switch-models-panel'
                 onSelectModel={handleBulkSwitchModels}
+                onApplyPreset={handleApplyPreset}
               >
-                <Button
-                  size='mini'
-                  type='outline'
+                <button
+                  type='button'
                   data-testid='profiler-switch-models-btn'
-                  loading={switchingModels}
-                  icon={<Exchange theme='outline' size='12' fill='currentColor' />}
+                  disabled={switchingModels}
+                  className='h-26px px-10px rounded-6px bg-1 hover:bg-3 border border-solid border-b-base text-11px font-500 text-t-primary inline-flex items-center gap-5px cursor-pointer transition-colors outline-none disabled:opacity-50'
                 >
-                  {t('team.modelHub.switchModelsBtn', 'Switch Models')}
-                </Button>
+                  <Exchange theme='outline' size='12' fill='currentColor' className='shrink-0' />
+                  <span>{t('team.modelHub.switchModelsBtn', 'Switch Models')}</span>
+                </button>
               </ConnectedModelPickerPopover>
             </div>
           </div>
 
           {roomTeams && roomTeams.length > 1 && (
-            <div className='flex items-center gap-4px flex-wrap'>
+            <div className='flex items-center gap-6px flex-wrap'>
               {roomTeams.map((tm) => (
                 <button
                   key={tm.team_id}
@@ -325,10 +371,10 @@ export const TwoLaneProfiler: React.FC<TwoLaneProfilerProps> = ({
                   data-testid={`profiler-team-pill-${tm.team_id}`}
                   onClick={() => setSelectedTeamId(tm.team_id)}
                   className={classNames(
-                    'px-8px py-2px rd-999px text-11px border-0 cursor-pointer transition-colors',
+                    'px-10px py-3px rounded-full text-11px border border-solid outline-none cursor-pointer transition-colors',
                     effectiveTeamId === tm.team_id
-                      ? 'bg-[#165DFF] text-white font-600'
-                      : 'bg-fill-3 text-t-secondary hover:text-t-primary'
+                      ? 'bg-[#165DFF] border-[#165DFF] text-white font-600'
+                      : 'bg-1 border-b-base text-t-secondary hover:bg-3 hover:text-t-primary'
                   )}
                 >
                   {tm.team_name}
@@ -351,7 +397,7 @@ export const TwoLaneProfiler: React.FC<TwoLaneProfilerProps> = ({
                   <div
                     key={slot.slot_id}
                     data-testid={`profiler-slot-card-${slot.slot_id}`}
-                    className='p-10px rd-8px bg-bg-1 border border-solid border-arco-2 flex flex-col gap-6px'
+                    className='p-12px rounded-8px bg-1 border border-solid border-b-base flex flex-col gap-6px'
                   >
                     <div className='flex items-center justify-between gap-6px'>
                       <div className='flex items-center gap-6px min-w-0 flex-1'>
@@ -362,7 +408,7 @@ export const TwoLaneProfiler: React.FC<TwoLaneProfilerProps> = ({
                         <span
                           data-testid={`profiler-slot-wallet-${slot.slot_id}`}
                           className={classNames(
-                            'px-5px py-0.5px rd-999px text-10px font-600 shrink-0',
+                            'px-6px py-0.5px rounded-full text-10px font-600 shrink-0',
                             slot.wallet_type === 'cli_subscription'
                               ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
                               : 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
@@ -379,7 +425,7 @@ export const TwoLaneProfiler: React.FC<TwoLaneProfilerProps> = ({
                           data-testid={`profiler-slot-pct-${slot.slot_id}`}
                           data-context-level={level}
                           className={classNames(
-                            'px-6px py-1px rd-999px text-10px font-mono font-700',
+                            'px-6px py-1px rounded-full text-10px font-mono font-700',
                             level === 'critical'
                               ? 'bg-red-500/15 text-red-700 dark:text-red-300'
                               : level === 'warning'
@@ -390,39 +436,42 @@ export const TwoLaneProfiler: React.FC<TwoLaneProfilerProps> = ({
                           {pct}%
                         </span>
 
-                        <Button
-                          size='mini'
-                          type='secondary'
+                        <button
+                          type='button'
                           data-testid={`profiler-slot-compact-${slot.slot_id}`}
-                          loading={compacting}
+                          disabled={compacting}
                           onClick={() => void handleCompactSlot(slot.slot_id)}
+                          className='h-24px px-8px rounded-6px bg-2 hover:bg-3 border border-solid border-b-base text-11px font-500 text-t-primary inline-flex items-center gap-4px cursor-pointer transition-colors outline-none disabled:opacity-50'
                         >
-                          {t('team.modelHub.compactShortBtn', 'Compact')}
-                        </Button>
+                          <span>{t('team.modelHub.compactShortBtn', 'Compact')}</span>
+                        </button>
 
                         <ConnectedModelPickerPopover
                           showForceInterrupt
                           panelTestId={`profiler-slot-switch-panel-${slot.slot_id}`}
                           onSelectModel={(target, meta) => handleSlotSwitchModel(slot.slot_id, target, meta)}
                         >
-                          <Button
-                            size='mini'
-                            type='outline'
+                          <button
+                            type='button'
                             data-testid={`profiler-slot-switch-${slot.slot_id}`}
                             disabled={switchingModels}
+                            className='h-24px px-8px rounded-6px bg-2 hover:bg-3 border border-solid border-b-base text-11px font-500 text-t-primary inline-flex items-center gap-4px cursor-pointer transition-colors outline-none disabled:opacity-50'
                           >
-                            {t('team.modelHub.switchModelsBtn', 'Switch Models')}
-                          </Button>
+                            <span>{t('team.modelHub.switchModelsBtn', 'Switch Models')}</span>
+                          </button>
                         </ConnectedModelPickerPopover>
                       </div>
                     </div>
 
-                    <Progress
-                      percent={pct}
-                      size='small'
-                      showText={false}
-                      status={level === 'critical' ? 'error' : level === 'warning' ? 'warning' : 'normal'}
-                    />
+                    <div className='w-full'>
+                      <Progress
+                        percent={pct}
+                        size='small'
+                        showText={false}
+                        style={{ width: '100%' }}
+                        status={level === 'critical' ? 'error' : level === 'warning' ? 'warning' : 'normal'}
+                      />
+                    </div>
 
                     <div className='flex items-center justify-between gap-8px text-10px text-t-tertiary font-mono flex-wrap'>
                       <span data-testid={`profiler-slot-model-${slot.slot_id}`} className='truncate'>

@@ -34,7 +34,9 @@ export const BudgetWarningCard: React.FC<BudgetWarningCardProps> = ({
       disabled={isResolved}
       onClick={() => onResolve(card.id, 'approve')}
     >
-      {t('team.actionInbox.budgetWarning.reviewBtn', 'Acknowledge & Keep Cap')}
+      {t('team.actionInbox.budgetWarning.reviewBtn', 'Acknowledge & Keep Cap', {
+        limit: limit.toFixed(2),
+      })}
     </Button>
   );
 
@@ -64,11 +66,14 @@ export const BudgetWarningCard: React.FC<BudgetWarningCardProps> = ({
           </span>
         </div>
 
-        <Progress
-          percent={percentage}
-          status={percentage >= 100 ? 'error' : 'warning'}
-          animation
-        />
+        <div className='w-full'>
+          <Progress
+            percent={percentage}
+            status={percentage >= 100 ? 'error' : 'warning'}
+            animation
+            style={{ width: '100%' }}
+          />
+        </div>
       </div>
     </BaseInboxCard>
   );

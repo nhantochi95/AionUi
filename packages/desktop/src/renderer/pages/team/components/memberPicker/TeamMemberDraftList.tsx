@@ -3,7 +3,7 @@ import { Button } from '@arco-design/web-react';
 import { CloseSmall, Crown, Down } from '@icon-park/react';
 import classNames from 'classnames';
 import { useTranslation } from 'react-i18next';
-import type { ModelTargetSpec } from '@/common/types/team/teamHubTypes';
+import type { ModelTargetSpec, TeamQuotaPreset } from '@/common/types/team/teamHubTypes';
 import { AssistantOptionLabel, type TeamAssistantOption } from '../assistantSelectUtils';
 import ConnectedModelPickerPopover from '../modelHub/ConnectedModelPickerPopover';
 
@@ -20,6 +20,7 @@ type Props = {
   onRemove: (selectionId: string) => void;
   onChangeMemberModel?: (selectionId: string, model: ModelTargetSpec | undefined) => void;
   onBulkSetModel?: (target: ModelTargetSpec, scope: 'all' | 'teammates_only') => void;
+  onApplyQuotaPreset?: (preset: TeamQuotaPreset) => void;
   /**
    * 可选的标题行操作区，渲染在“已选成员 N”标题右侧、替换默认的 Leader 图例。
    * 窄屏用它承载“添加成员”按钮，避免另起一行重复渲染标题。
@@ -40,6 +41,7 @@ const TeamMemberDraftList: React.FC<Props> = ({
   onRemove,
   onChangeMemberModel,
   onBulkSetModel,
+  onApplyQuotaPreset,
   headerAction,
   listBoxClassName,
 }) => {
@@ -73,16 +75,17 @@ const TeamMemberDraftList: React.FC<Props> = ({
         {hasMembers && onBulkSetModel && (
           <ConnectedModelPickerPopover
             showScopeSelector
-            defaultScope='all'
+            defaultScope='teammates_only'
             panelTestId='team-create-bulk-model-panel'
             onSelectModel={(target, meta) => {
               onBulkSetModel(target, meta.scope === 'teammates_only' ? 'teammates_only' : 'all');
             }}
+            onApplyPreset={onApplyQuotaPreset ? (preset) => onApplyQuotaPreset(preset) : undefined}
           >
             <button
               type='button'
               data-testid='team-create-bulk-model-btn'
-              className='shrink-0 h-26px px-8px rd-6px bg-fill-2 hover:bg-fill-3 border border-solid border-arco-2 text-11px font-600 text-t-primary inline-flex items-center gap-4px cursor-pointer transition-colors'
+              className='shrink-0 h-26px px-10px rounded-full bg-2 hover:bg-3 border border-solid border-b-base text-11px font-600 text-t-primary inline-flex items-center gap-4px cursor-pointer transition-colors outline-none'
             >
               <span>{t('team.modelHub.bulkSetModelBtn', { defaultValue: 'Bulk Set Model' })}</span>
               <Down theme='outline' size='12' fill='currentColor' />
@@ -92,10 +95,10 @@ const TeamMemberDraftList: React.FC<Props> = ({
       </div>
       <div
         data-testid='team-create-member-list-box'
-        className={`min-h-120px flex-1 overflow-y-auto rounded-8px bg-fill-1 ${hasMembers ? 'flex flex-col gap-6px p-8px' : 'flex items-center justify-center px-14px py-12px'} ${listBoxClassName ?? ''}`}
+        className={`min-h-120px flex-1 overflow-y-auto rounded-8px bg-fill-1 ${hasMembers ? 'flex flex-col gap-6px p-8px' : 'flex flex-col px-14px py-8px'} ${listBoxClassName ?? ''}`}
       >
         {!hasMembers ? (
-          <div className='flex max-w-260px flex-col items-center gap-6px text-center'>
+          <div className='m-auto flex max-w-340px flex-col items-center gap-4px text-center'>
             <span className='text-13px font-500 leading-20px text-t-secondary'>
               {t('team.create.selectAtLeastOneMember', {
                 defaultValue: 'Select at least one assistant as the Team Leader.',
@@ -141,12 +144,12 @@ const TeamMemberDraftList: React.FC<Props> = ({
                         type='button'
                         data-testid={`team-create-member-model-${member.selectionId}`}
                         className={classNames(
-                          'h-24px max-w-150px px-7px rd-999px border border-solid text-11px inline-flex items-center gap-4px cursor-pointer transition-colors',
+                          'h-24px max-w-135px px-8px rounded-full border border-solid text-11px inline-flex items-center gap-4px cursor-pointer transition-colors outline-none',
                           override
                             ? override.wallet_type === 'api_key'
                               ? 'bg-amber-500/12 border-amber-500/30 text-amber-700 dark:text-amber-300 font-600'
                               : 'bg-emerald-500/12 border-emerald-500/30 text-emerald-700 dark:text-emerald-300 font-600'
-                            : 'bg-bg-1 border-arco-2 text-t-secondary hover:bg-fill-2'
+                            : 'bg-1 border-b-base text-t-secondary hover:bg-2'
                         )}
                         title={override?.label ?? chipText}
                       >

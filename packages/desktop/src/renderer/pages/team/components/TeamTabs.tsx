@@ -7,8 +7,9 @@ import classNames from 'classnames';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TeammateStatus } from '@/common/types/team/teamTypes';
-import type { ModelTargetSpec, SlotContextStatusDto } from '@/common/types/team/teamHubTypes';
+import type { ModelTargetSpec, SlotContextStatusDto, TeamQuotaPreset } from '@/common/types/team/teamHubTypes';
 import { restrictToHorizontalAxis } from '@/renderer/utils/ui/dndModifiers';
+import { useCompositionInput } from '@renderer/hooks/chat/useCompositionInput';
 import AgentStatusBadge from './AgentStatusBadge';
 import TeamAgentIdentity from './TeamAgentIdentity';
 import { useTeamTabs } from '../hooks/TeamTabsContext';
@@ -18,6 +19,7 @@ import ConnectedModelPickerPopover, {
   type ModelSlotOption,
 } from './modelHub/ConnectedModelPickerPopover';
 import TeamContextCompactPopover from './modelHub/TeamContextCompactPopover';
+import { useConnectedModelsCatalog } from './modelHub/useConnectedModelsCatalog';
 import { resolveSlotContextLevel, useTeamContextAndModels } from './modelHub/useTeamContextAndModels';
 
 const TAB_OVERFLOW_THRESHOLD = 10;
@@ -69,6 +71,7 @@ const TeamTabView: React.FC<TeamTabViewProps> = ({
   const [editValue, setEditValue] = useState(assistant_name);
   const [hovered, setHovered] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const renameComposition = useCompositionInput();
   // Leader stays fixed at index 0 and never takes part in sorting.
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
     id: slot_id,
@@ -94,17 +97,14 @@ const TeamTabView: React.FC<TeamTabViewProps> = ({
     }
   }, [editValue, assistant_name, slot_id, onRename]);
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter') {
-        commitRename();
-      } else if (e.key === 'Escape') {
-        setEditValue(assistant_name);
-        setEditing(false);
-      }
-    },
-    [commitRename, assistant_name]
-  );
+  const handleKeyDown = renameComposition.createKeyDownHandler(commitRename, (e) => {
+    if (e.key === 'Escape') {
+      setEditValue(assistant_name);
+      setEditing(false);
+      return true;
+    }
+    return false;
+  });
 
   const startEditing = useCallback(
     (e: React.MouseEvent) => {
@@ -166,6 +166,7 @@ const TeamTabView: React.FC<TeamTabViewProps> = ({
           value={editValue}
           onChange={(e) => setEditValue(e.target.value)}
           onBlur={commitRename}
+          {...renameComposition.compositionHandlers}
           onKeyDown={handleKeyDown}
         />
       ) : (
@@ -291,14 +292,26 @@ const TeamTabs: React.FC<TeamTabsProps> = ({ onTabClick, pendingCounts, warmingU
     slotsBySlotId,
     autoCompactEnabled,
     autoCompactThresholdPct,
+    economyMode,
+    maxContextTokens,
+    tokensSavedEstimate,
+    coalescedWakesSaved,
+    totalWakeupTurns,
+    totalInputTokens,
+    totalOutputTokens,
+    totalCachedReadTokens,
+    totalEstimatedCostUsd,
     maxUsagePercent,
     highestLevel,
     compacting,
     switchingModels,
     compactTeam,
     toggleAutoCompact,
+    updateEconomyPrefs,
     switchModels,
+    applyQuotaPreset,
   } = useTeamContextAndModels(team_id);
+  const { catalog: catalogData } = useConnectedModelsCatalog(Boolean(team_id));
 
   const memberOpsDisabled = warmingUp;
   const tabsContainerRef = useRef<HTMLDivElement>(null);
@@ -375,6 +388,31 @@ const TeamTabs: React.FC<TeamTabsProps> = ({ onTabClick, pendingCounts, warmingU
       }
     },
     [switchModels, t]
+  );
+
+  const handleApplyPreset = useCallback(
+    async (preset: TeamQuotaPreset) => {
+      try {
+        await applyQuotaPreset(preset, catalogData);
+        Message.success(
+          preset === 'smart_split'
+            ? t('team.modelHub.presetAppliedSmartSplit', {
+                defaultValue: 'Applied Smart Split: Pro Leader + $0 CLI teammates',
+              })
+            : t('team.modelHub.presetAppliedFreeCli', {
+                defaultValue: 'Switched team to 100% $0 CLI subscription models',
+              })
+        );
+      } catch (err) {
+        Message.error(
+          t('team.modelHub.switchModelsFailed', {
+            error: String(err),
+            defaultValue: `Failed to switch models: ${String(err)}`,
+          })
+        );
+      }
+    },
+    [applyQuotaPreset, catalogData, t]
   );
 
   const updateTabOverflow = useCallback(() => {
@@ -496,6 +534,7 @@ const TeamTabs: React.FC<TeamTabsProps> = ({ onTabClick, pendingCounts, warmingU
                 slotOptions={slotOptions}
                 panelTestId='team-tabs-switch-models-panel'
                 onSelectModel={handleSwitchModels}
+                onApplyPreset={handleApplyPreset}
               >
                 <button
                   type='button'
@@ -519,8 +558,18 @@ const TeamTabs: React.FC<TeamTabsProps> = ({ onTabClick, pendingCounts, warmingU
                 fallbackMembers={fallbackMembers}
                 autoCompactEnabled={autoCompactEnabled}
                 autoCompactThresholdPct={autoCompactThresholdPct}
+                economyMode={economyMode}
+                maxContextTokens={maxContextTokens}
+                tokensSavedEstimate={tokensSavedEstimate}
+                coalescedWakesSaved={coalescedWakesSaved}
+                totalWakeupTurns={totalWakeupTurns}
+                totalInputTokens={totalInputTokens}
+                totalOutputTokens={totalOutputTokens}
+                totalCachedReadTokens={totalCachedReadTokens}
+                totalEstimatedCostUsd={totalEstimatedCostUsd}
                 compacting={compacting}
                 onToggleAutoCompact={toggleAutoCompact}
+                onUpdateEconomyPrefs={updateEconomyPrefs}
                 onCompactAll={() => compactTeam({ mode: 'auto' })}
                 onCompactSlot={(slotId) => compactTeam({ slot_id: slotId, mode: 'auto' })}
               >

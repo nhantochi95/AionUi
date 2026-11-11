@@ -4,7 +4,14 @@
 
 export interface ActionInboxCardDto {
   id: string;
-  category: 'worktree_merge' | 'multiple_choice' | 'budget_warning' | 'max_hops' | string;
+  category:
+    | 'worktree_merge'
+    | 'multiple_choice'
+    | 'budget_warning'
+    | 'max_hops'
+    | 'approve_done'
+    | 'quota_fallback'
+    | string;
   title: string;
   summary: string;
   details: Record<string, any>;

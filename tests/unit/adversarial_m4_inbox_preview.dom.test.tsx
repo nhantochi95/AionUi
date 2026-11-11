@@ -225,7 +225,7 @@ describe('Adversarial Stress Test: Milestone 4 Frontend Hybrid Command Hub', () 
       const wtEl = screen.getByTestId('inbox-card-wt-1');
       expect(wtEl).toHaveStyle({ opacity: 0.48 });
       expect(screen.getByText('✓ Resolved')).toBeInTheDocument();
-      expect(screen.getByText('✓ Approve & Merge').closest('button')).toBeDisabled();
+      expect(screen.getByText('Approve & Merge').closest('button')).toBeDisabled();
       expect(screen.getByText('Reject / Discard').closest('button')).toBeDisabled();
       unmount1();
 
@@ -591,8 +591,11 @@ describe('Adversarial Stress Test: Milestone 4 Frontend Hybrid Command Hub', () 
         />
       );
 
-      // Default subtab is Diff
-      expect(screen.getByTestId('git-diff-viewer')).toBeInTheDocument();
+      // With task and no worktreeLeaseId, default subtab is Preview (task details)
+      expect(screen.getByText('Auth Flow Verification')).toBeInTheDocument();
+      expect(screen.getByText('Verify JWT and token refresh flow')).toBeInTheDocument();
+      expect(screen.getByText('📄 arch.png')).toBeInTheDocument();
+      expect(screen.getByText('📄 notes.txt')).toBeInTheDocument();
       expect(screen.queryByTestId('two-lane-profiler')).not.toBeInTheDocument();
 
       // Switch to Profiler subtab
@@ -600,17 +603,14 @@ describe('Adversarial Stress Test: Milestone 4 Frontend Hybrid Command Hub', () 
       expect(screen.getByTestId('two-lane-profiler')).toBeInTheDocument();
       expect(screen.queryByTestId('git-diff-viewer')).not.toBeInTheDocument();
 
-      // Switch to Xem thử (Artifacts) subtab
-      fireEvent.click(screen.getByTestId('subtab-preview'));
-      expect(screen.getByText('Auth Flow Verification')).toBeInTheDocument();
-      expect(screen.getByText('Verify JWT and token refresh flow')).toBeInTheDocument();
-      expect(screen.getByText('📄 arch.png')).toBeInTheDocument();
-      expect(screen.getByText('📄 notes.txt')).toBeInTheDocument();
-      expect(screen.queryByTestId('two-lane-profiler')).not.toBeInTheDocument();
-
-      // Switch back to Diff subtab
+      // Switch to Diff subtab (shows clean empty state without fake sample diff)
       fireEvent.click(screen.getByTestId('subtab-diff'));
       expect(screen.getByTestId('git-diff-viewer')).toBeInTheDocument();
+      expect(screen.getByTestId('git-diff-empty-state')).toBeInTheDocument();
+
+      // Switch back to Xem thử (Artifacts) subtab
+      fireEvent.click(screen.getByTestId('subtab-preview'));
+      expect(screen.getByText('Auth Flow Verification')).toBeInTheDocument();
     });
 
     it('renders diff stats, worktree isolation notice, and handles one-click squash merge with idempotency', async () => {
@@ -646,7 +646,7 @@ describe('Adversarial Stress Test: Milestone 4 Frontend Hybrid Command Hub', () 
       });
 
       // Verify transition to merged state
-      expect(screen.getByText('✓ Branch already merged into main')).toBeInTheDocument();
+      expect(screen.getByText('Branch already merged into main')).toBeInTheDocument();
       expect(mergeBtn.closest('button')).toBeDisabled();
 
       // Idempotency: further clicks do not trigger merge invoke again
@@ -672,7 +672,7 @@ describe('Adversarial Stress Test: Milestone 4 Frontend Hybrid Command Hub', () 
       // Dual Wallet cards
       expect(screen.getByTestId('wallet-cli-card')).toBeInTheDocument();
       expect(screen.getByText('$0.00')).toBeInTheDocument();
-      expect(screen.getByText(/Claude Max \/ Codex CLI/)).toBeInTheDocument();
+      expect(screen.getByText(/Direct OAuth CLI engines/)).toBeInTheDocument();
       expect(screen.getByTestId('wallet-api-card')).toBeInTheDocument();
       expect(screen.getByText('$1.45 / $5.00')).toBeInTheDocument();
 

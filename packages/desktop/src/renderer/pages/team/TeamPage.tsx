@@ -1,5 +1,6 @@
 import { Button, Dropdown, Menu, Message, Modal, Spin, Tooltip } from '@arco-design/web-react';
-import { FullScreen, Left, MoreOne, OffScreen, Peoples, Right } from '@icon-park/react';
+import { Exchange, FullScreen, Left, Lightning, MoreOne, OffScreen, Peoples, Refresh, Right } from '@icon-park/react';
+import classNames from 'classnames';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR, { useSWRConfig } from 'swr';
@@ -7,6 +8,7 @@ import { useAuth } from '@renderer/hooks/context/AuthContext';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { ipcBridge } from '@/common';
 import type { ITeamSlotWork, TeamAssistant, TeamContextResetAvailability, TTeam } from '@/common/types/team/teamTypes';
+import type { ModelTargetSpec, SlotContextStatusDto } from '@/common/types/team/teamHubTypes';
 import type { IProvider, TChatConversation, TProviderWithModel } from '@/common/config/storage';
 import {
   classifyConfigSetError,
@@ -47,6 +49,8 @@ import { setCurrentConversation } from '@/renderer/pages/conversation/explorer/c
 import { getSnapshotConversationProjectId } from '@/renderer/pages/conversation/GroupedHistory/hooks/useConversationListSync';
 import { isBackendHttpError } from '@/common/adapter/httpBridge';
 import { getTeamHubBridge } from './components/modelHub/bridgeSafe';
+import ConnectedModelPickerPopover from './components/modelHub/ConnectedModelPickerPopover';
+import { resolveSlotContextLevel, useTeamContextAndModels } from './components/modelHub/useTeamContextAndModels';
 
 type Props = {
   team: TTeam;
@@ -248,8 +252,18 @@ const TeamAgentActions: React.FC<{
   team_id: string;
   runtimeAvailability: TeamContextResetAvailability;
   contextResetAvailability: TeamContextResetAvailability;
+  compactingSlot?: boolean;
+  onCompactSlot?: () => Promise<unknown>;
   onRuntimeChanged: () => Promise<void>;
-}> = ({ assistant, team_id, runtimeAvailability, contextResetAvailability, onRuntimeChanged }) => {
+}> = ({
+  assistant,
+  team_id,
+  runtimeAvailability,
+  contextResetAvailability,
+  compactingSlot = false,
+  onCompactSlot,
+  onRuntimeChanged,
+}) => {
   const { t } = useTranslation();
   const teamTarget = useMemo(() => ({ team_id, slot_id: assistant.slot_id }), [assistant.slot_id, team_id]);
   const { restart, restarting } = useAcpRuntimeRestart({
@@ -335,10 +349,21 @@ const TeamAgentActions: React.FC<{
   const menu = (
     <Menu
       onClickMenuItem={(key) => {
+        if (key === 'compact-context' && onCompactSlot) void onCompactSlot();
         if (key === 'reconnect') confirmReconnect();
         if (key === 'context-reset') confirmContextReset();
       }}
     >
+      {onCompactSlot && (
+        <Menu.Item key='compact-context' disabled={compactingSlot || restarting || resetting}>
+          {actionContent(
+            t('team.modelHub.compactSlotAction', { defaultValue: 'Compact Context' }),
+            t('team.modelHub.compactSlotActionDesc', {
+              defaultValue: 'Summarize history to free tokens without losing task progress',
+            })
+          )}
+        </Menu.Item>
+      )}
       <Menu.Item key='reconnect' disabled={reconnectDisabled || restarting || resetting}>
         {actionContent(
           t('agent.runtimeRestart.tooltip'),
@@ -395,6 +420,11 @@ const AssistantChatSlot: React.FC<{
   fallbackAvailability: TeamContextResetAvailability;
   /** 整队 warming 期间为 true —— 此时不下发手动触发器。 */
   warmupDisabled?: boolean;
+  /** Live context window & wallet telemetry for this slot */
+  slotContext?: SlotContextStatusDto;
+  compactingSlot?: boolean;
+  onCompactSlot?: (slotId: string) => Promise<unknown>;
+  onSwitchSlotModel?: (slotId: string, target: ModelTargetSpec, forceInterrupt?: boolean) => Promise<unknown>;
 }> = ({
   assistant,
   team_id,
@@ -409,6 +439,10 @@ const AssistantChatSlot: React.FC<{
   warmupStatus,
   fallbackAvailability,
   warmupDisabled,
+  slotContext,
+  compactingSlot = false,
+  onCompactSlot,
+  onSwitchSlotModel,
 }) => {
   const { t } = useTranslation();
   const layout = useLayoutContext();
@@ -472,21 +506,65 @@ const AssistantChatSlot: React.FC<{
   const handleRuntimeChanged = useCallback(async () => {
     await Promise.all([mutateConversation(), onRunStateStale('context-reset.result')]);
   }, [mutateConversation, onRunStateStale]);
+  const slotContextPct = slotContext ? Math.max(0, Math.min(100, Math.round(slotContext.usage_percent))) : undefined;
+  const slotContextLevel =
+    slotContext && slotContextPct !== undefined
+      ? resolveSlotContextLevel(slotContextPct, slotContext.level)
+      : undefined;
+  const showRecoveryBanner =
+    !warmupDisabled &&
+    (assistant.status === 'failed' || warmup.status === 'failed' || runtimeActionAvailability === 'failed');
+
   // 抬头不叠身份色底（避免压低彩色名字的可读性）；成员身份仅由抬头里的“彩色名字”承担。
   // 列身体保留极淡身份色底作弱提示，不影响气泡阅读。
   return (
     <div className='flex flex-col h-full' style={{ background: `color-mix(in srgb, ${color} 4%, var(--bg-base))` }}>
       <div className='flex items-center justify-between gap-8px px-12px h-40px shrink-0 border-b border-solid border-[color:var(--border-base)] relative z-10 bg-1'>
-        <TeamAgentIdentity
-          assistant_name={assistant.assistant_name}
-          assistant_backend={assistant.assistant_backend}
-          icon={assistant.icon}
-          conversation_id={assistant.conversation_id}
-          isLeader={isLeader}
-          className='min-w-0'
-          nameClassName='text-13px font-600'
-          nameStyle={{ color }}
-        />
+        <div className='flex items-center gap-6px min-w-0 flex-1'>
+          <TeamAgentIdentity
+            assistant_name={assistant.assistant_name}
+            assistant_backend={assistant.assistant_backend}
+            icon={assistant.icon}
+            conversation_id={assistant.conversation_id}
+            isLeader={isLeader}
+            className='min-w-0'
+            nameClassName='text-13px font-600'
+            nameStyle={{ color }}
+          />
+          {slotContext && (
+            <>
+              <span
+                data-testid={`slot-header-wallet-${assistant.slot_id}`}
+                className={classNames(
+                  'shrink-0 px-5px py-0.5px rd-999px text-10px font-600 select-none',
+                  slotContext.wallet_type === 'api_key'
+                    ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+                    : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                )}
+              >
+                {slotContext.wallet_type === 'api_key'
+                  ? t('team.modelHub.apiBadge', { defaultValue: 'API' })
+                  : t('team.modelHub.cliBadge', { defaultValue: '$0 CLI' })}
+              </span>
+              {slotContextPct !== undefined && slotContextLevel && (
+                <span
+                  data-testid={`slot-header-context-${assistant.slot_id}`}
+                  data-context-level={slotContextLevel}
+                  className={classNames(
+                    'shrink-0 px-5px py-0.5px rd-999px text-10px font-mono font-700 leading-14px border border-solid select-none',
+                    slotContextLevel === 'critical'
+                      ? 'bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/30'
+                      : slotContextLevel === 'warning'
+                        ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30'
+                        : 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-300 border-emerald-500/25'
+                  )}
+                >
+                  {slotContextPct}%
+                </span>
+              )}
+            </>
+          )}
+        </div>
         <div className='flex items-center gap-8px shrink-0'>
           {conversation && <CronJobManager conversation_id={conversation.id} cron_job_id={cronJobId} />}
           {!isMobile && assistant.conversation_id && !isAionrs && isAcpLike && (
@@ -501,6 +579,24 @@ const AssistantChatSlot: React.FC<{
                 warmup={warmup}
               />
             </div>
+          )}
+          {isLeader && onCompactSlot && Boolean(getTeamHubBridge()) && (
+            <Tooltip
+              content={t('team.modelHub.compactSlotAction', {
+                defaultValue: 'Compact Context',
+              })}
+            >
+              <button
+                type='button'
+                data-testid={`slot-compact-context-${assistant.slot_id}`}
+                aria-label={t('team.modelHub.compactSlotAction', { defaultValue: 'Compact Context' })}
+                disabled={compactingSlot}
+                onClick={() => void onCompactSlot(assistant.slot_id)}
+                className='h-26px w-26px rd-6px flex items-center justify-center bg-transparent hover:bg-[var(--fill-3)] text-[color:var(--color-text-3)] hover:text-[color:var(--color-text-1)] border-none cursor-pointer transition-colors shrink-0'
+              >
+                <Lightning theme='outline' size='14' fill='currentColor' />
+              </button>
+            </Tooltip>
           )}
           {assistant.conversation_id && !isAionrs && isAcpLike && isLeader && (
             <div className='shrink-0'>
@@ -522,6 +618,8 @@ const AssistantChatSlot: React.FC<{
                 team_id={team_id}
                 runtimeAvailability={runtimeActionAvailability}
                 contextResetAvailability={contextResetAvailability}
+                compactingSlot={compactingSlot}
+                onCompactSlot={onCompactSlot ? () => onCompactSlot(assistant.slot_id) : undefined}
                 onRuntimeChanged={handleRuntimeChanged}
               />
             </div>
@@ -546,6 +644,49 @@ const AssistantChatSlot: React.FC<{
           </div>
         </div>
       </div>
+      {showRecoveryBanner && (
+        <div
+          data-testid={`slot-error-recovery-banner-${assistant.slot_id}`}
+          className='shrink-0 px-12px py-7px bg-amber-500/10 border-b border-solid border-amber-500/25 flex flex-wrap items-center justify-between gap-8px z-10'
+        >
+          <span className='text-11px font-500 text-amber-700 dark:text-amber-300 leading-16px'>
+            {t('team.modelHub.slotRecoveryBannerTitle', {
+              defaultValue: 'Agent runtime failed or quota paused — retry or switch to a $0 CLI model',
+            })}
+          </span>
+          <div className='flex items-center gap-6px shrink-0'>
+            {warmup.trigger && (
+              <button
+                type='button'
+                data-testid={`slot-recovery-retry-${assistant.slot_id}`}
+                onClick={() => void warmup.trigger?.()}
+                className='h-24px px-8px rd-6px text-11px font-600 inline-flex items-center gap-4px bg-fill-2 hover:bg-fill-3 text-t-primary border border-solid border-arco-2 cursor-pointer transition-colors'
+              >
+                <Refresh theme='outline' size='12' fill='currentColor' />
+                <span>{t('team.modelHub.slotRecoveryRetryBtn', { defaultValue: 'Retry' })}</span>
+              </button>
+            )}
+            {onSwitchSlotModel && (
+              <ConnectedModelPickerPopover
+                panelTestId={`slot-recovery-model-panel-${assistant.slot_id}`}
+                showForceInterrupt
+                onSelectModel={(target, meta) => {
+                  void onSwitchSlotModel(assistant.slot_id, target, meta.forceInterrupt);
+                }}
+              >
+                <button
+                  type='button'
+                  data-testid={`slot-recovery-switch-model-${assistant.slot_id}`}
+                  className='h-24px px-8px rd-6px text-11px font-600 inline-flex items-center gap-4px bg-emerald-600 hover:bg-emerald-700 text-white border-none cursor-pointer transition-colors'
+                >
+                  <Exchange theme='outline' size='12' fill='currentColor' />
+                  <span>{t('team.modelHub.slotRecoverySwitchBtn', { defaultValue: 'Switch Model' })}</span>
+                </button>
+              </ConnectedModelPickerPopover>
+            )}
+          </div>
+        </div>
+      )}
       <div className='relative flex flex-col flex-1 min-h-0'>
         {conversation ? (
           <TeamChatView
@@ -595,6 +736,49 @@ const TeamPageContent: React.FC<TeamPageContentProps> = ({
   const activeAssistant = assistants.find((assistant) => assistant.slot_id === activeSlotId);
   const leadAssistant = assistants.find((assistant) => assistant.role === 'leader');
   const teamRun = useTeamRunView(team.id);
+  const { slotsBySlotId, compacting: compactingTeam, compactTeam, switchModels } = useTeamContextAndModels(team.id);
+
+  const handleCompactSlot = useCallback(
+    async (slotId: string) => {
+      try {
+        await compactTeam({ slot_id: slotId, mode: 'auto' });
+        Message.success(
+          t('team.modelHub.compactSlotSuccess', {
+            defaultValue: 'Compacted slot context window',
+          })
+        );
+      } catch (err) {
+        Message.error(String(err));
+      }
+    },
+    [compactTeam, t]
+  );
+
+  const handleSwitchSlotModel = useCallback(
+    async (slotId: string, target: ModelTargetSpec, forceInterrupt?: boolean) => {
+      try {
+        await switchModels({
+          scope: 'slots',
+          updates: [{ slot_id: slotId, target }],
+          force_interrupt: forceInterrupt,
+        });
+        Message.success(
+          t('team.modelHub.switchModelsSuccess', {
+            count: 1,
+            defaultValue: 'Updated models for 1 member(s)',
+          })
+        );
+      } catch (err) {
+        Message.error(
+          t('team.modelHub.switchModelsFailed', {
+            error: String(err),
+            defaultValue: `Failed to switch models: ${String(err)}`,
+          })
+        );
+      }
+    },
+    [switchModels, t]
+  );
 
   // 进团队 warmup：以团队会话整体就绪为闸门（ensureSession resolve = 全员成功）。遮罩覆盖对话区。
   // runtimeStatus 是各成员逐个的真实唤醒信号，用于遮罩头像的「唤醒中→点亮」及失败态定位。
@@ -905,6 +1089,10 @@ const TeamPageContent: React.FC<TeamPageContentProps> = ({
                         isLeaderSlot ? teamWarmupPhaseAvailability(warmupPhase) : assistant.context_reset.availability
                       }
                       warmupDisabled={isWarmingUp}
+                      slotContext={slotsBySlotId[assistant.slot_id]}
+                      compactingSlot={compactingTeam}
+                      onCompactSlot={handleCompactSlot}
+                      onSwitchSlotModel={handleSwitchSlotModel}
                     />
                   </div>
                 );
@@ -975,6 +1163,10 @@ const TeamPageContent: React.FC<TeamPageContentProps> = ({
                               : assistant.context_reset.availability
                           }
                           warmupDisabled={isWarmingUp}
+                          slotContext={slotsBySlotId[assistant.slot_id]}
+                          compactingSlot={compactingTeam}
+                          onCompactSlot={handleCompactSlot}
+                          onSwitchSlotModel={handleSwitchSlotModel}
                         />
                       </div>
                     );

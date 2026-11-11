@@ -67,7 +67,7 @@ export const MultipleChoiceCard: React.FC<MultipleChoiceCardProps> = ({
               <span className='font-medium'>{opt}</span>
               {recommendedIndex === idx && (
                 <span className='ms-6px px-4px py-1px rd-4px text-10px bg-[rgb(var(--primary-1))] text-[rgb(var(--primary-6))] font-bold'>
-                  Recommended
+                  {t('team.actionInbox.multipleChoice.recommended', 'Recommended')}
                 </span>
               )}
             </Radio>

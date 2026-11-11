@@ -48,7 +48,7 @@ export const WorktreeMergeCard: React.FC<WorktreeMergeCardProps> = ({
         onClick={() => onResolve(card.id, 'approve')}
         icon={<CheckOne />}
       >
-        {t('team.actionInbox.worktreeMerge.approveBtn', '✓ Approve & Merge')}
+        {t('team.actionInbox.worktreeMerge.approveBtn', 'Approve & Merge')}
       </Button>
     </>
   );

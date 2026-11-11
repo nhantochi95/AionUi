@@ -9,7 +9,7 @@ import { Empty, Spin, Switch, Trigger } from '@arco-design/web-react';
 import { CheckSmall, Search } from '@icon-park/react';
 import classNames from 'classnames';
 import { useTranslation } from 'react-i18next';
-import type { ModelTargetSpec } from '@/common/types/team/teamHubTypes';
+import type { ModelTargetSpec, TeamQuotaPreset } from '@/common/types/team/teamHubTypes';
 import { useCompositionInput } from '@renderer/hooks/chat/useCompositionInput';
 import {
   useConnectedModelsCatalog,
@@ -48,6 +48,7 @@ export interface ConnectedModelPickerPopoverProps {
   panelTestId?: string;
   position?: 'bl' | 'br' | 'tl' | 'tr' | 'bottom' | 'top';
   onSelectModel: (target: ModelTargetSpec, meta: ModelPickerSelectionMeta) => void | Promise<void>;
+  onApplyPreset?: (preset: TeamQuotaPreset, forceInterrupt: boolean) => void | Promise<void>;
 }
 
 const ConnectedModelPickerPanel: React.FC<{
@@ -64,6 +65,7 @@ const ConnectedModelPickerPanel: React.FC<{
   onSelectTeamId?: (teamId: string) => void;
   panelTestId?: string;
   onPick: (target: ModelTargetSpec, meta: ModelPickerSelectionMeta) => void;
+  onApplyPreset?: (preset: TeamQuotaPreset, forceInterrupt: boolean) => void;
   onClear: () => void;
 }> = ({
   selectedTarget,
@@ -78,6 +80,7 @@ const ConnectedModelPickerPanel: React.FC<{
   onSelectTeamId,
   panelTestId = 'connected-model-picker-panel',
   onPick,
+  onApplyPreset,
   onClear,
 }) => {
   const { t } = useTranslation();
@@ -167,11 +170,14 @@ const ConnectedModelPickerPanel: React.FC<{
           </span>
         </div>
         {groups.map((group) => (
-          <div key={group.groupId} className='flex flex-col gap-2px'>
-            <div className='px-8px py-2px text-11px font-600 text-t-secondary flex items-center gap-6px'>
+          <div
+            key={group.groupId}
+            className='flex flex-col gap-2px pt-4px border-t border-solid border-b-light first:pt-0 first:border-t-0'
+          >
+            <div className='px-8px py-3px text-11px font-700 text-t-secondary flex items-center gap-6px'>
               <span className='truncate'>{group.title}</span>
               {group.supportsNativeCompact && (
-                <span className='px-4px py-0.5px rd-4px bg-fill-3 text-10px font-mono text-t-tertiary'>
+                <span className='px-5px py-1px rounded-4px bg-2 text-10px font-mono text-t-tertiary'>
                   {t('team.modelHub.nativeCompactBadge', { defaultValue: '/compact' })}
                 </span>
               )}
@@ -188,10 +194,10 @@ const ConnectedModelPickerPanel: React.FC<{
                   data-provider-id={item.providerId ?? ''}
                   onClick={() => emitSelection(item)}
                   className={classNames(
-                    'w-full flex items-center justify-between gap-8px px-8px py-6px rd-6px border-0 text-left cursor-pointer transition-colors text-12px',
+                    'w-full flex items-center justify-between gap-8px px-10px py-6px rounded-8px border-0 outline-none text-left cursor-pointer transition-colors text-12px',
                     active
                       ? 'bg-[#165DFF]/12 text-[#165DFF] font-600'
-                      : 'bg-transparent text-t-primary hover:bg-fill-2'
+                      : 'bg-transparent text-t-primary hover:bg-2'
                   )}
                 >
                   <div className='min-w-0 flex-1 flex items-center gap-6px'>
@@ -204,7 +210,7 @@ const ConnectedModelPickerPanel: React.FC<{
                   <div className='shrink-0 flex items-center gap-6px'>
                     <span
                       className={classNames(
-                        'px-5px py-1px rd-999px text-10px font-600 leading-14px',
+                        'px-6px py-1px rounded-full text-10px font-600 leading-14px',
                         item.walletType === 'cli_subscription'
                           ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
                           : 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
@@ -228,13 +234,18 @@ const ConnectedModelPickerPanel: React.FC<{
   return (
     <div
       data-testid={panelTestId}
-      className='w-320px max-w-[calc(100vw-24px)] flex flex-col gap-8px rd-10px border border-solid border-arco-2 bg-bg-1 p-10px shadow-lg text-t-primary'
-      style={{ zIndex: 10050 }}
+      className='w-336px max-w-[calc(100vw-24px)] flex flex-col gap-8px rounded-12px border border-solid border-b-base bg-dialog-fill-0 p-12px shadow-xl text-t-primary'
+      style={{
+        zIndex: 10050,
+        backgroundColor: 'var(--dialog-fill-0, var(--bg-1, #ffffff))',
+        borderColor: 'var(--border-base, #e5e6eb)',
+        boxShadow: '0 12px 32px rgba(15, 23, 42, 0.18)',
+      }}
       onClick={(e) => e.stopPropagation()}
     >
       {/* Optional multi-team selector (for SharedRoomPage with multiple participating teams) */}
       {teamOptions && teamOptions.length > 1 && onSelectTeamId && (
-        <div className='flex items-center gap-4px flex-wrap pb-6px border-b border-solid border-arco-2'>
+        <div className='flex items-center gap-4px flex-wrap pb-6px border-b border-solid border-b-base'>
           <span className='text-11px font-600 text-t-tertiary me-2px'>
             {t('team.modelHub.selectTeamLabel', { defaultValue: 'Team' })}:
           </span>
@@ -245,10 +256,10 @@ const ConnectedModelPickerPanel: React.FC<{
               data-testid={`model-picker-team-${tm.team_id}`}
               onClick={() => onSelectTeamId(tm.team_id)}
               className={classNames(
-                'px-7px py-2px rd-999px text-11px border-0 cursor-pointer transition-colors truncate max-w-120px',
+                'px-8px py-2px rounded-full text-11px border-0 outline-none cursor-pointer transition-colors truncate max-w-130px',
                 selectedTeamId === tm.team_id
                   ? 'bg-[#165DFF] text-white font-600'
-                  : 'bg-fill-2 text-t-secondary hover:bg-fill-3'
+                  : 'bg-2 text-t-secondary hover:bg-3'
               )}
             >
               {tm.team_name}
@@ -257,9 +268,36 @@ const ConnectedModelPickerPanel: React.FC<{
         </div>
       )}
 
+      {/* 1-Click Quota Presets when onApplyPreset is provided */}
+      {onApplyPreset && (
+        <div className='flex flex-col gap-5px pb-8px border-b border-solid border-b-base'>
+          <span className='text-10px font-700 uppercase tracking-wider text-t-tertiary'>
+            {t('team.modelHub.quotaPresetsLabel', { defaultValue: '1-Click Quota Presets' })}
+          </span>
+          <div className='grid grid-cols-2 gap-6px'>
+            <button
+              type='button'
+              data-testid='model-picker-preset-smart-split'
+              onClick={() => onApplyPreset('smart_split', forceInterrupt)}
+              className='px-8px py-6px rounded-8px text-11px font-600 text-left border border-solid border-[#165DFF]/35 bg-[#165DFF]/10 hover:bg-[#165DFF]/18 text-[#165DFF] cursor-pointer transition-colors outline-none'
+            >
+              {t('team.modelHub.presetSmartSplitShort', { defaultValue: 'Smart Split ($0 Workers)' })}
+            </button>
+            <button
+              type='button'
+              data-testid='model-picker-preset-free-cli'
+              onClick={() => onApplyPreset('all_free_cli', forceInterrupt)}
+              className='px-8px py-6px rounded-8px text-11px font-600 text-left border border-solid border-emerald-500/35 bg-emerald-500/10 hover:bg-emerald-500/18 text-emerald-700 dark:text-emerald-300 cursor-pointer transition-colors outline-none'
+            >
+              {t('team.modelHub.presetAllFreeCli', { defaultValue: '100% $0 CLI' })}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Optional Scope Selector: All Members (incl. Leader) vs Teammates Only */}
       {showScopeSelector && (
-        <div className='flex flex-col gap-6px pb-6px border-b border-solid border-arco-2'>
+        <div className='flex flex-col gap-6px pb-8px border-b border-solid border-b-base'>
           <span className='text-11px font-600 text-t-secondary'>
             {t('team.modelHub.scopeLabel', { defaultValue: 'Target Scope' })}
           </span>
@@ -270,10 +308,10 @@ const ConnectedModelPickerPanel: React.FC<{
               aria-pressed={scope === 'all'}
               onClick={() => setScope('all')}
               className={classNames(
-                'px-8px py-5px rd-6px text-12px text-left border border-solid cursor-pointer transition-colors',
+                'px-10px py-6px rounded-8px text-12px text-left border border-solid outline-none cursor-pointer transition-colors',
                 scope === 'all'
                   ? 'border-[#165DFF] bg-[#165DFF]/10 text-[#165DFF] font-600'
-                  : 'border-arco-2 bg-fill-1 text-t-secondary hover:bg-fill-2'
+                  : 'border-b-base bg-2 text-t-secondary hover:bg-3'
               )}
             >
               {t('team.modelHub.scopeAll', { defaultValue: 'All Members (incl. Leader)' })}
@@ -284,10 +322,10 @@ const ConnectedModelPickerPanel: React.FC<{
               aria-pressed={scope === 'teammates_only'}
               onClick={() => setScope('teammates_only')}
               className={classNames(
-                'px-8px py-5px rd-6px text-12px text-left border border-solid cursor-pointer transition-colors',
+                'px-10px py-6px rounded-8px text-12px text-left border border-solid outline-none cursor-pointer transition-colors',
                 scope === 'teammates_only'
                   ? 'border-[#165DFF] bg-[#165DFF]/10 text-[#165DFF] font-600'
-                  : 'border-arco-2 bg-fill-1 text-t-secondary hover:bg-fill-2'
+                  : 'border-b-base bg-2 text-t-secondary hover:bg-3'
               )}
             >
               {t('team.modelHub.scopeTeammatesOnly', { defaultValue: 'Teammates Only (Keep Leader)' })}
@@ -307,10 +345,10 @@ const ConnectedModelPickerPanel: React.FC<{
                       setSelectedSlotId(slot.slot_id);
                     }}
                     className={classNames(
-                      'px-7px py-2px rd-999px text-11px border border-solid cursor-pointer transition-colors max-w-140px truncate',
+                      'px-8px py-2px rounded-full text-11px border border-solid outline-none cursor-pointer transition-colors max-w-140px truncate',
                       isSelectedSlot
                         ? 'border-[#165DFF] bg-[#165DFF]/12 text-[#165DFF] font-600'
-                        : 'border-arco-2 bg-fill-1 text-t-tertiary hover:text-t-primary'
+                        : 'border-b-base bg-2 text-t-tertiary hover:text-t-primary'
                     )}
                   >
                     {slot.isLeader ? '👑 ' : ''}
@@ -325,7 +363,7 @@ const ConnectedModelPickerPanel: React.FC<{
 
       {/* Optional Force Interrupt Toggle for live running teams */}
       {showForceInterrupt && (
-        <div className='flex items-center justify-between gap-8px px-4px py-4px rd-6px bg-fill-1 border border-solid border-arco-2'>
+        <div className='flex items-center justify-between gap-10px px-10px py-7px rounded-8px bg-2 border border-solid border-b-base'>
           <div className='flex flex-col min-w-0 flex-1'>
             <span className='text-11px font-600 text-t-primary'>
               {t('team.modelHub.forceInterruptLabel', { defaultValue: 'Interrupt & Swap Immediately' })}
@@ -336,17 +374,20 @@ const ConnectedModelPickerPanel: React.FC<{
               })}
             </span>
           </div>
-          <Switch
-            size='small'
-            data-testid='model-picker-force-interrupt-switch'
-            checked={forceInterrupt}
-            onChange={setForceInterrupt}
-          />
+          <div className='shrink-0 flex items-center'>
+            <Switch
+              size='small'
+              className='shrink-0'
+              data-testid='model-picker-force-interrupt-switch'
+              checked={forceInterrupt}
+              onChange={setForceInterrupt}
+            />
+          </div>
         </div>
       )}
 
       {/* IME-Safe Search Filter */}
-      <div className='flex items-center gap-6px px-8px h-30px rd-6px bg-fill-2 border border-solid border-arco-2'>
+      <div className='flex items-center gap-6px px-10px h-32px rounded-8px bg-2 border border-solid border-b-base'>
         <Search theme='outline' size='13' fill='currentColor' className='text-t-tertiary shrink-0' />
         <input
           type='text'
@@ -424,6 +465,7 @@ export const ConnectedModelPickerPopover: React.FC<ConnectedModelPickerPopoverPr
   panelTestId,
   position = 'br',
   onSelectModel,
+  onApplyPreset,
 }) => {
   const [visible, setVisible] = useState(false);
 
@@ -454,6 +496,14 @@ export const ConnectedModelPickerPopover: React.FC<ConnectedModelPickerPopoverPr
             setVisible(false);
             void onSelectModel(target, meta);
           }}
+          onApplyPreset={
+            onApplyPreset
+              ? (preset, forceInterrupt) => {
+                  setVisible(false);
+                  void onApplyPreset(preset, forceInterrupt);
+                }
+              : undefined
+          }
           onClear={() => {
             setVisible(false);
             onClearOverride?.();
