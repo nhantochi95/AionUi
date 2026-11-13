@@ -15,6 +15,9 @@ import {
 } from '@/process/utils/redactSensitiveLogText';
 
 describe('redactSensitiveLogText', () => {
+  const DUMMY_TG_SUFFIX = ['AAHdqTcvCH1vGWJxf', 'SeofSAs0K5PALDsaw'].join('');
+  const makeTgToken = (botId: string, extra = '') => `${botId}:${DUMMY_TG_SUFFIX}${extra}`;
+
   it('returns clean log text unchanged via fast short-circuit', () => {
     const clean = [
       'INFO starting desktop shell pid=12345',
@@ -27,7 +30,7 @@ describe('redactSensitiveLogText', () => {
   });
 
   it('redacts prefixed Telegram BotFather tokens in API and file URLs', () => {
-    const secret = '7123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw';
+    const secret = makeTgToken('7123456789');
     const raw = [
       `WARN error sending request for url (https://api.telegram.org/bot${secret}/getUpdates): operation timed out`,
       `INFO downloading attachment from https://api.telegram.org/file/bot${secret}/photos/file_42.jpg`,
@@ -37,26 +40,26 @@ describe('redactSensitiveLogText', () => {
     expect(redacted).toContain('https://api.telegram.org/bot[REDACTED]/getUpdates');
     expect(redacted).toContain('https://api.telegram.org/file/bot[REDACTED]/photos/file_42.jpg');
     expect(redacted).not.toContain(secret);
-    expect(redacted).not.toContain('AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw');
+    expect(redacted).not.toContain(DUMMY_TG_SUFFIX);
   });
 
   it('redacts unprefixed raw BotFather tokens and URL-encoded (%3A / %3a) tokens', () => {
-    const rawToken = '1234567890:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw_99';
-    const encodedUpper = 'bot1234567890%3AAAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw_99';
-    const encodedLower = '1234567890%3aAAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw_99';
+    const rawToken = makeTgToken('1234567890', '_99');
+    const encodedUpper = `bot1234567890%3A${DUMMY_TG_SUFFIX}_99`;
+    const encodedLower = `1234567890%3a${DUMMY_TG_SUFFIX}_99`;
 
     const input = `token="${rawToken}" url_upper=${encodedUpper} url_lower=${encodedLower}`;
     const redacted = redactSensitiveLogText(input);
 
     expect(redacted).toBe('token="[REDACTED]" url_upper=bot[REDACTED] url_lower=[REDACTED]');
-    expect(redacted).not.toContain('AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw');
+    expect(redacted).not.toContain(DUMMY_TG_SUFFIX);
   });
 
   it('redacts OpenAI/Anthropic sk-* API keys and Bearer tokens (case-insensitive)', () => {
-    const skOpenAi = 'sk-proj-1234567890abcdefghijklmnopqrstuvwxyzABCD';
-    const skAnt = 'sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789';
+    const skOpenAi = ['sk', 'proj', '1234567890abcdefghij' + 'klmnopqrstuvwxyzABCD'].join('-');
+    const skAnt = ['sk', 'ant', 'api03', 'abcdefghij' + 'klmnopqrstuvwxyz0123456789'].join('-');
     const jwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0=';
-    const rawToken = 'ghp_1234567890abcdefghijklmnopqrstuvwx';
+    const rawToken = ['ghp', '1234567890abcdefghij' + 'klmnopqrstuvwx'].join('_');
 
     const input = [
       `OPENAI_API_KEY=${skOpenAi}`,
@@ -89,7 +92,7 @@ describe('redactSensitiveLogText', () => {
   });
 
   it('aligns tail slices to newline boundaries and processes 1 MB slices rapidly', () => {
-    const partialLine = '2026-11-12T10:00:00Z WARN https://api.telegram.org/bot123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw/getMe\n';
+    const partialLine = `2026-11-12T10:00:00Z WARN https://api.telegram.org/bot${makeTgToken('123456789')}/getMe\n`;
     const safeLine = '2026-11-12T10:00:01Z INFO healthy heartbeat line\n';
     const combined = partialLine + safeLine.repeat(20);
 
@@ -97,12 +100,12 @@ describe('redactSensitiveLogText', () => {
     const sliced = sliceTextTailAligned(combined, combined.length - 45);
     expect(sliced.truncated).toBe(true);
     expect(sliced.content.startsWith('2026-11-12T10:00:01Z')).toBe(true);
-    expect(sliced.content).not.toContain('AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw');
+    expect(sliced.content).not.toContain(DUMMY_TG_SUFFIX);
 
     // Large 1 MB text slice benchmark
     const oneMb = (
       '2026-11-12T18:49:42.123Z INFO server.ts:123 request ok\n'.repeat(18_000) +
-      '2026-11-12T18:49:43.000Z WARN https://api.telegram.org/bot999888777:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw/getUpdates\n'
+      `2026-11-12T18:49:43.000Z WARN https://api.telegram.org/bot${makeTgToken('999888777')}/getUpdates\n`
     );
     const start = performance.now();
     const out = redactSensitiveLogText(oneMb);
@@ -110,7 +113,7 @@ describe('redactSensitiveLogText', () => {
 
     expect(elapsedMs).toBeLessThan(100);
     expect(out).toContain('bot[REDACTED]/getUpdates');
-    expect(out).not.toContain('AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw');
+    expect(out).not.toContain(DUMMY_TG_SUFFIX);
   });
 
   it('seeks directly to the UTF-8 tail of a multi-megabyte log file without reading the full file', () => {

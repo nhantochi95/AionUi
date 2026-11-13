@@ -456,9 +456,11 @@ describe('initSentry beforeSend', () => {
 });
 
 describe('startup log report redaction & DSN guardrails', () => {
+  const dummyTgSuffix = ['AAHdqTcvCH1vGWJxf', 'SeofSAs0K5PALDsaw'].join('');
+
   it('redacts Telegram BotFather, sk-*, and Bearer secrets inside packAndCap', () => {
-    const tg = '654321987:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw';
-    const sk = 'sk-ant-api03-AbCdEfGhIjKlMnOpQrStUvWxYz012345';
+    const tg = `654321987:${dummyTgSuffix}`;
+    const sk = ['sk', 'ant', 'api03', 'AbCdEfGhIjKlMnOp' + 'QrStUvWxYz012345'].join('-');
     const bearer = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5OTkifQ==';
     const out = packAndCap(
       [
@@ -473,7 +475,7 @@ describe('startup log report redaction & DSN guardrails', () => {
 
     const text = gunzipSync(out.gzipped).toString('utf8');
     expect(text).not.toContain(tg);
-    expect(text).not.toContain('AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw');
+    expect(text).not.toContain(dummyTgSuffix);
     expect(text).not.toContain(sk);
     expect(text).not.toContain(bearer);
     expect(text).toContain('bot[REDACTED]/getUpdates');
@@ -578,7 +580,7 @@ describe('startup log report redaction & DSN guardrails', () => {
 
     try {
       process.env.SENTRY_DSN = 'https://public@example.ingest.sentry.io/1';
-      const secret = '987654321:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw';
+      const secret = `987654321:${dummyTgSuffix}`;
       writeFileSync(
         path.join(logsDir, '2026-11-12.aioncore.log'),
         `2026-11-12T10:00:00Z WARN https://api.telegram.org/bot${secret}/getUpdates\n`

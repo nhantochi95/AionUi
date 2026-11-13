@@ -223,14 +223,15 @@ describe('feedback logs', () => {
   it('redacts Telegram BotFather tokens, sk-* keys, and Bearer tokens inside logs.gz', () => {
     const logsDir = mkdtempSync(path.join(tmpdir(), 'aionui-feedback-redact-'));
     try {
-      const tgSecret = '7123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw';
-      const skSecret = 'sk-proj-AbCdEfGhIjKlMnOpQrStUvWxYz0123456789';
+      const dummyTgSuffix = ['AAHdqTcvCH1vGWJxf', 'SeofSAs0K5PALDsaw'].join('');
+      const tgSecret = `7123456789:${dummyTgSuffix}`;
+      const skSecret = ['sk', 'proj', 'AbCdEfGhIjKlMnOpQr' + 'StUvWxYz0123456789'].join('-');
       const bearerSecret = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0=';
       writeFileSync(
         path.join(logsDir, '2026-11-12.aioncore.log'),
         [
           `2026-11-12T18:49:42.123Z WARN reqwest https://api.telegram.org/bot${tgSecret}/getUpdates timeout`,
-          `2026-11-12T18:49:43.000Z INFO raw=${tgSecret} encoded=bot7123456789%3AAAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw`,
+          `2026-11-12T18:49:43.000Z INFO raw=${tgSecret} encoded=bot7123456789%3A${dummyTgSuffix}`,
           `2026-11-12T18:49:44.000Z INFO key=${skSecret} auth=Bearer ${bearerSecret}`,
           '2026-11-12T18:49:45.000Z INFO stack at server.ts:123 and 127.0.0.1:25810',
         ].join('\n') + '\n'
@@ -241,7 +242,7 @@ describe('feedback logs', () => {
       const content = gunzipSync(attachment!.data).toString('utf8');
 
       expect(content).not.toContain(tgSecret);
-      expect(content).not.toContain('AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw');
+      expect(content).not.toContain(dummyTgSuffix);
       expect(content).not.toContain(skSecret);
       expect(content).not.toContain(bearerSecret);
       expect(content).toContain('bot[REDACTED]/getUpdates');
@@ -257,6 +258,7 @@ describe('feedback logs', () => {
   it('bounds a 50 MB debug log file via tail slicing without stalling the main thread', () => {
     const logsDir = mkdtempSync(path.join(tmpdir(), 'aionui-feedback-50mb-'));
     try {
+      const dummyTgSuffix = ['AAHdqTcvCH1vGWJxf', 'SeofSAs0K5PALDsaw'].join('');
       const logPath = path.join(logsDir, '2026-11-12.aioncore.log');
       const fillerChunk = Buffer.from(('2026-11-12T10:00:00Z DEBUG noisy line without secrets\n').repeat(2000));
       const chunks = Math.ceil((50 * 1024 * 1024) / fillerChunk.length);
@@ -269,7 +271,7 @@ describe('feedback logs', () => {
         writeSync(
           fd,
           Buffer.from(
-            '2026-11-12T12:00:00Z WARN https://api.telegram.org/bot888888888:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw/sendMessage TAIL_SENTINEL\n'
+            `2026-11-12T12:00:00Z WARN https://api.telegram.org/bot888888888:${dummyTgSuffix}/sendMessage TAIL_SENTINEL\n`
           )
         );
       } finally {
@@ -285,7 +287,7 @@ describe('feedback logs', () => {
       const content = gunzipSync(attachment!.data).toString('utf8');
       expect(content).toContain('TAIL_SENTINEL');
       expect(content).toContain('bot[REDACTED]/sendMessage');
-      expect(content).not.toContain('AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw');
+      expect(content).not.toContain(dummyTgSuffix);
     } finally {
       rmSync(logsDir, { recursive: true, force: true });
     }
