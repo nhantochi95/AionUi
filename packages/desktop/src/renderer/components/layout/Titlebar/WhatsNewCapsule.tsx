@@ -16,7 +16,7 @@ declare const __APP_VERSION__: string;
 
 const WhatsNewCapsule: React.FC = () => {
   const { t } = useTranslation();
-  const version = typeof __APP_VERSION__ === 'string' && __APP_VERSION__.trim() ? __APP_VERSION__.trim() : '2.3.0';
+  const version = typeof __APP_VERSION__ === 'string' && __APP_VERSION__.trim() ? __APP_VERSION__.trim() : '2.3.1';
   const [unseen, setUnseen] = useState<boolean>(() => !hasSeenCurrentWhatsNew());
 
   useEffect(() => {

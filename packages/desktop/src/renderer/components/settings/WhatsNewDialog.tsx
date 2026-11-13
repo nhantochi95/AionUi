@@ -21,7 +21,7 @@ export const WHATS_NEW_FORCE_AUTO_OPEN_KEY = 'aionui.whatsNew.forceAutoOpen';
 const CUSTOM_CHANGELOG_URL = 'https://github.com/nhantochi95/AionUi/blob/feat/hybrid-command-hub/CHANGELOG.md';
 
 const getSafeAppVersion = (): string => {
-  return typeof __APP_VERSION__ === 'string' && __APP_VERSION__.trim() ? __APP_VERSION__.trim() : '2.3.0';
+  return typeof __APP_VERSION__ === 'string' && __APP_VERSION__.trim() ? __APP_VERSION__.trim() : '2.3.1';
 };
 
 export const hasSeenCurrentWhatsNew = (): boolean => {
@@ -148,7 +148,7 @@ const WhatsNewDialog: React.FC = () => {
           </div>
         ),
         subtitle: t('update.whatsNew.subtitle', {
-          defaultValue: 'Core Engine v0.3.0 · Released 2026-11-11',
+          defaultValue: 'Core Engine v0.3.1 · Released 2026-11-13',
         }),
         showClose: true,
       }}

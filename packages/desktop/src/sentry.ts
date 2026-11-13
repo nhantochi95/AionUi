@@ -8,8 +8,13 @@ import * as Sentry from '@sentry/electron/main';
 import { app, type BrowserWindow } from 'electron';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { gzipSync } from 'node:zlib';
+import { constants as zlibConstants, gzipSync } from 'node:zlib';
 import { getOrCreateAnalyticsId } from './process/utils/analyticsId';
+import {
+  readLogFileTailUtf8Sync,
+  redactSensitiveLogText,
+  sliceTextTailAligned,
+} from './process/utils/redactSensitiveLogText';
 import { readAutoUpdateDiagnostics } from './process/services/autoUpdateDiagnostics';
 import { collectBackendInstallDiagnostics } from './process/startup/backendInstallDiagnostics';
 import { classifyBackendStartupFailure } from './process/startup/backendStartupFailure';
@@ -366,10 +371,14 @@ export function selectRecentLogFiles(files: LogFileMeta[], n: number): LogFileMe
 export type LogSegment = { name: string; mtime: number; content: string };
 export type PackResult = { gzipped: Buffer; truncated: boolean };
 
+const PACK_MAX_UNCOMPRESSED_CHARS = 768 * 1024;
+const STARTUP_REPORT_MAX_FILE_TAIL_BYTES = 512 * 1024;
+
 /**
- * Concatenate segments with a per-file header, gzip them, and shrink-from-head
- * until the gzipped size fits `maxBytes`. The tail (newest content) survives
- * because Sentry users care most about recent activity around the crash.
+ * Concatenate segments with a per-file header, cap the uncompressed tail first,
+ * scrub sensitive tokens, gzip, and shrink-from-head until the gzipped size fits
+ * `maxBytes`. The tail (newest content) survives because Sentry users care most
+ * about recent activity around the crash.
  */
 export function packAndCap(segments: LogSegment[], maxBytes: number): PackResult {
   const headers = segments.map((s) => `===== ${s.name} (mtime: ${new Date(s.mtime).toISOString()}) =====\n`);
@@ -379,12 +388,16 @@ export function packAndCap(segments: LogSegment[], maxBytes: number): PackResult
     if (i < segments.length - 1) combined += '\n';
   }
 
-  let gzipped = gzipSync(combined);
+  const uncompressedCap = Math.min(PACK_MAX_UNCOMPRESSED_CHARS, Math.max(maxBytes * 10, 4096));
+  const preSliced = sliceTextTailAligned(combined, uncompressedCap);
+  const sanitized = redactSensitiveLogText(preSliced.content);
+
+  let gzipped = gzipSync(sanitized, { level: zlibConstants.Z_BEST_SPEED });
   if (gzipped.length <= maxBytes) {
-    return { gzipped, truncated: false };
+    return { gzipped, truncated: preSliced.truncated };
   }
 
-  let truncated = combined;
+  let truncated = sanitized;
   for (let attempt = 0; attempt < 5; attempt++) {
     const ratio = gzipped.length / Math.max(truncated.length, 1);
     const targetUncompressed = Math.max(Math.floor((maxBytes / ratio) * 0.9), 1024);
@@ -393,14 +406,14 @@ export function packAndCap(segments: LogSegment[], maxBytes: number): PackResult
     } else {
       truncated = truncated.slice(truncated.length - targetUncompressed);
     }
-    gzipped = gzipSync(truncated);
+    gzipped = gzipSync(truncated, { level: zlibConstants.Z_BEST_SPEED });
     if (gzipped.length <= maxBytes) {
       return { gzipped, truncated: true };
     }
   }
 
   truncated = truncated.slice(-Math.floor(maxBytes / 2));
-  gzipped = gzipSync(truncated);
+  gzipped = gzipSync(truncated, { level: zlibConstants.Z_BEST_SPEED });
   return { gzipped, truncated: true };
 }
 
@@ -467,10 +480,10 @@ export function listLogFilesSync(dir: string): LogFileMeta[] {
   return out;
 }
 
-class UnretryableError extends Error {}
+export class UnretryableError extends Error {}
 class RetryableError extends Error {}
 
-async function runStartupLogReport(): Promise<void> {
+export async function runStartupLogReport(): Promise<void> {
   const now = Date.now();
   const state = readState();
 
@@ -482,8 +495,7 @@ async function runStartupLogReport(): Promise<void> {
 
   // DSN gate goes first so we don't read the disk for nothing.
   // Don't write state — the next launch with a DSN should still fire.
-  if (!process.env.SENTRY_DSN) {
-    console.info('[sentry] startup log report skipped (SENTRY_DSN not set)');
+  if (!process.env.SENTRY_DSN?.trim()) {
     throw new UnretryableError('no DSN');
   }
 
@@ -502,13 +514,20 @@ async function runStartupLogReport(): Promise<void> {
     throw new UnretryableError('no non-empty logs');
   }
 
+  let diskTruncated = false;
   let segments: LogSegment[];
   try {
-    segments = selected.map((f) => ({
-      name: path.basename(f.path),
-      mtime: f.mtime,
-      content: fs.readFileSync(f.path, 'utf8'),
-    }));
+    segments = selected.map((f) => {
+      const tail = readLogFileTailUtf8Sync(f.path, STARTUP_REPORT_MAX_FILE_TAIL_BYTES);
+      if (tail.truncated) {
+        diskTruncated = true;
+      }
+      return {
+        name: path.basename(f.path),
+        mtime: f.mtime,
+        content: tail.content,
+      };
+    });
   } catch (err) {
     throw new RetryableError(`read failed: ${(err as Error).message}`);
   }
@@ -516,6 +535,9 @@ async function runStartupLogReport(): Promise<void> {
   let pack: PackResult;
   try {
     pack = packAndCap(segments, ATTACHMENT_CAP_BYTES);
+    if (diskTruncated && !pack.truncated) {
+      pack = { gzipped: pack.gzipped, truncated: true };
+    }
   } catch (err) {
     throw new RetryableError(`gzip failed: ${(err as Error).message}`);
   }
@@ -549,9 +571,16 @@ async function runStartupLogReport(): Promise<void> {
  * retries.
  */
 export function scheduleStartupLogReport(window: BrowserWindow): void {
+  if (!process.env.SENTRY_DSN?.trim()) {
+    return;
+  }
+
   const trigger = () => {
     setTimeout(() => {
       runStartupLogReport().catch((err) => {
+        if (err instanceof UnretryableError) {
+          return;
+        }
         console.error('[sentry] startup log report failed:', err);
       });
     }, STARTUP_DELAY_MS);

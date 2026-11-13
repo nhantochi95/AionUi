@@ -787,19 +787,31 @@ const TeamPageContent: React.FC<TeamPageContentProps> = ({
 
   const leaderConversationId = leadAssistant?.conversation_id ?? '';
   const isLeaderAssistant = activeAssistant?.role === 'leader';
-  const allConversationIds = useMemo(
-    () => assistants.map((assistant) => assistant.conversation_id).filter(Boolean),
+  const allConversationIdsKey = useMemo(
+    () =>
+      assistants
+        .map((assistant) => assistant.conversation_id)
+        .filter((id): id is string => Boolean(id))
+        .join(','),
     [assistants]
   );
-  const runtimeStartingConversationIds = useMemo(
+  const allConversationIds = useMemo(
+    () => (allConversationIdsKey ? allConversationIdsKey.split(',') : []),
+    [allConversationIdsKey]
+  );
+  const runtimeStartingKey = useMemo(
     () =>
-      new Set(
-        assistants
-          .filter((assistant) => teamRun.state.slotWorkBySlot[assistant.slot_id]?.blocked_reason === 'runtime_starting')
-          .map((assistant) => assistant.conversation_id)
-          .filter(Boolean)
-      ),
+      assistants
+        .filter((assistant) => teamRun.state.slotWorkBySlot[assistant.slot_id]?.blocked_reason === 'runtime_starting')
+        .map((assistant) => assistant.conversation_id)
+        .filter((id): id is string => Boolean(id))
+        .sort()
+        .join(','),
     [assistants, teamRun.state.slotWorkBySlot]
+  );
+  const runtimeStartingConversationIds = useMemo<ReadonlySet<string>>(
+    () => new Set(runtimeStartingKey ? runtimeStartingKey.split(',') : []),
+    [runtimeStartingKey]
   );
 
   // Fetch leader assistant's conversation for the workspace sider. Its

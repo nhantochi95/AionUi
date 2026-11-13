@@ -98,7 +98,7 @@
     "capsuleTooltip": "What's new in v{{version}}",
     "buttonLabel": "What's New",
     "title": "What's New in AionUi v{{version}}",
-    "subtitle": "Core Engine v0.3.0 · Released 2026-11-11",
+    "subtitle": "Core Engine v0.3.1 · Released 2026-11-13",
     "gotIt": "Got it",
     "viewFullChangelog": "Full Changelog on GitHub",
     "sections": {

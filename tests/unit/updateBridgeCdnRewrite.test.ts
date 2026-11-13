@@ -104,7 +104,10 @@ const getCheckHandler = async () => {
   const { initUpdateBridge } = await import('@process/bridge/updateBridge');
   const { ipcBridge } = await import('@/common');
 
-  initUpdateBridge();
+  initUpdateBridge({
+    cdnBaseUrl: 'https://static.aionui.com/releases',
+    githubRepo: 'iOfficeAI/AionUi',
+  });
 
   const provider = vi.mocked(ipcBridge.update.check.provider);
   const lastCall = provider.mock.calls.at(-1);
@@ -230,7 +233,10 @@ describe('updateBridge allowlist includes CDN host', () => {
       const { initUpdateBridge } = await import('@process/bridge/updateBridge');
       const { ipcBridge } = await import('@/common');
 
-      initUpdateBridge();
+      initUpdateBridge({
+        cdnBaseUrl: 'https://static.aionui.com/releases',
+        githubRepo: 'iOfficeAI/AionUi',
+      });
 
       const provider = vi.mocked(ipcBridge.update.download.provider);
       const lastCall = provider.mock.calls.at(-1);
@@ -257,7 +263,10 @@ describe('updateBridge allowlist includes CDN host', () => {
     const { initUpdateBridge } = await import('@process/bridge/updateBridge');
     const { ipcBridge } = await import('@/common');
 
-    initUpdateBridge();
+    initUpdateBridge({
+      cdnBaseUrl: 'https://static.aionui.com/releases',
+      githubRepo: 'iOfficeAI/AionUi',
+    });
 
     const provider = vi.mocked(ipcBridge.update.download.provider);
     const lastCall = provider.mock.calls.at(-1);

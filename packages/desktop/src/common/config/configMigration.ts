@@ -194,6 +194,14 @@ function normalizeLegacyMcpServer(
   };
 }
 
+function isUnsupportedChannelPlatformError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const status = (error as { status?: unknown }).status;
+  if (status === 400 || status === 404) return true;
+  const message = error instanceof Error ? error.message : '';
+  return message.includes('Invalid platform');
+}
+
 async function migrateLegacyChannelSettings(configFile: LegacyChannelConfigFile): Promise<void> {
   const assistants: ChannelAssistantCandidate[] = await ipcBridge.assistants.list
     .invoke()
@@ -207,38 +215,60 @@ async function migrateLegacyChannelSettings(configFile: LegacyChannelConfigFile)
     const assistantKey = `assistant.${platform}.agent` as const;
     const defaultModelKey = `assistant.${platform}.defaultModel` as const;
 
-    const [legacyAssistant, legacyDefaultModel, currentSettings] = await Promise.all([
+    const [legacyAssistant, legacyDefaultModel] = await Promise.all([
       configFile.get(assistantKey).catch((): undefined => undefined),
       configFile.get(defaultModelKey).catch((): undefined => undefined),
-      ipcBridge.channel.getPlatformSettings.invoke({ platform }).catch((): null => null),
     ]);
+
+    if (
+      (legacyAssistant === undefined || legacyAssistant === null) &&
+      (legacyDefaultModel === undefined || legacyDefaultModel === null)
+    ) {
+      continue;
+    }
+
+    let currentSettings: Awaited<ReturnType<typeof ipcBridge.channel.getPlatformSettings.invoke>> | null = null;
+    try {
+      currentSettings = await ipcBridge.channel.getPlatformSettings.invoke({ platform });
+    } catch (error) {
+      if (isUnsupportedChannelPlatformError(error)) {
+        continue;
+      }
+      currentSettings = null;
+    }
 
     const nextAssistantId =
       currentSettings?.assistant?.assistant_id ?? resolveLegacyChannelAssistantId(legacyAssistant, assistants);
 
     let changed = false;
 
-    if (!currentSettings?.assistant?.assistant_id && nextAssistantId) {
-      await ipcBridge.channel.setAssistantSetting.invoke({
-        platform,
-        assistant: { assistant_id: nextAssistantId },
-      });
-      changed = true;
-    }
+    try {
+      if (!currentSettings?.assistant?.assistant_id && nextAssistantId) {
+        await ipcBridge.channel.setAssistantSetting.invoke({
+          platform,
+          assistant: { assistant_id: nextAssistantId },
+        });
+        changed = true;
+      }
 
-    const nextDefaultModel =
-      currentSettings?.default_model ?? normalizeLegacyChannelDefaultModelSetting(legacyDefaultModel);
+      const nextDefaultModel =
+        currentSettings?.default_model ?? normalizeLegacyChannelDefaultModelSetting(legacyDefaultModel);
 
-    if (!currentSettings?.default_model && nextDefaultModel) {
-      await ipcBridge.channel.setDefaultModelSetting.invoke({
-        platform,
-        default_model: nextDefaultModel,
-      });
-      changed = true;
-    }
+      if (!currentSettings?.default_model && nextDefaultModel) {
+        await ipcBridge.channel.setDefaultModelSetting.invoke({
+          platform,
+          default_model: nextDefaultModel,
+        });
+        changed = true;
+      }
 
-    if (changed) {
-      await ipcBridge.channel.syncChannelSettings.invoke({ platform });
+      if (changed) {
+        await ipcBridge.channel.syncChannelSettings.invoke({ platform });
+      }
+    } catch (error) {
+      if (!isUnsupportedChannelPlatformError(error)) {
+        throw error;
+      }
     }
   }
 }

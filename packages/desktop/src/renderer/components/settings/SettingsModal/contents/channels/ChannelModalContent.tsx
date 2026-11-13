@@ -51,8 +51,20 @@ const BUILTIN_CHANNEL_TYPES = new Set(['telegram', 'lark', 'dingtalk', 'weixin',
  * TProviderWithModel and passing it as `initialModel` — this avoids triggering
  * the onSelectModel callback (and its toast) on mount.
  */
-const useChannelModelSelection = (platform: ChannelSettingsPlatform): GoogleModelSelection => {
+function isUnsupportedChannelPlatformError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const status = (error as { status?: unknown }).status;
+  if (status === 400 || status === 404) return true;
+  const message = error instanceof Error ? error.message : '';
+  return message.includes('Invalid platform');
+}
+
+const useChannelModelSelection = (
+  platform: ChannelSettingsPlatform,
+  options?: { enabled?: boolean }
+): GoogleModelSelection => {
   const { t } = useTranslation();
+  const enabled = options?.enabled ?? true;
 
   // Resolve persisted model into a full TProviderWithModel for initialModel.
   // useModelProviderList is SWR-backed so the duplicate call inside
@@ -68,12 +80,12 @@ const useChannelModelSelection = (platform: ChannelSettingsPlatform): GoogleMode
   const MAX_RESTORE_RETRIES = 5;
 
   useEffect(() => {
-    if (restored || providers.length === 0) return;
+    if (!enabled || restored || providers.length === 0) return;
 
     const restore = async () => {
       try {
         const settings = await channel.getPlatformSettings.invoke({ platform });
-        const saved = settings.default_model ?? undefined;
+        const saved = settings?.default_model ?? undefined;
         if (!saved?.id || !saved?.use_model) {
           // Nothing saved — mark restored so we don't keep retrying
           setRestored(true);
@@ -104,13 +116,15 @@ const useChannelModelSelection = (platform: ChannelSettingsPlatform): GoogleMode
         }
         setRestored(true);
       } catch (error) {
-        console.error(`[ChannelSettings] Failed to restore model for ${platform}:`, error);
+        if (!isUnsupportedChannelPlatformError(error)) {
+          console.error(`[ChannelSettings] Failed to restore model for ${platform}:`, error);
+        }
         setRestored(true);
       }
     };
 
     void restore();
-  }, [platform, providers, restored]);
+  }, [enabled, platform, providers, restored]);
 
   // Only called on explicit user selection — not during restoration
   const onSelectModel = useCallback(
@@ -191,7 +205,7 @@ const ChannelModalContent: React.FC = () => {
   const larkModelSelection = useChannelModelSelection('lark');
   const dingtalkModelSelection = useChannelModelSelection('dingtalk');
   const weixinModelSelection = useChannelModelSelection('weixin');
-  const wecomModelSelection = useChannelModelSelection('wecom');
+  const wecomModelSelection = useChannelModelSelection('wecom', { enabled: Boolean(wecomPluginStatus) });
 
   // Load plugin status
   const loadPluginStatus = useCallback(async () => {

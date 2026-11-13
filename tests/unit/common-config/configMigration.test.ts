@@ -281,6 +281,57 @@ describe('configMigration', () => {
       expect(ipcBridge.channel.setDefaultModelSetting.invoke).not.toHaveBeenCalled();
       expect(ipcBridge.channel.syncChannelSettings.invoke).not.toHaveBeenCalled();
     });
+
+    it('does not probe getPlatformSettings for wecom or unconfigured platforms on cold boot', async () => {
+      const configFile: ConfigFile = {
+        get: vi.fn().mockRejectedValue(new Error('not found')),
+        set: vi.fn(),
+      };
+      (ipcBridge.assistants.list.invoke as ReturnType<typeof vi.fn>).mockResolvedValue([
+        {
+          id: 'bare_codex',
+          source: 'generated',
+          agent_id: 'agent-codex',
+          agent: { type: 'acp', source: 'builtin', acp_backend: 'codex' },
+        },
+      ]);
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.spyOn(console, 'info').mockImplementation(() => {});
+
+      await migrateConfigStorage(configFile);
+
+      expect(ipcBridge.channel.getPlatformSettings.invoke).not.toHaveBeenCalled();
+      expect(errorSpy).not.toHaveBeenCalled();
+    });
+
+    it('ignores unsupported wecom 400 responses without throwing or logging console.error', async () => {
+      const configFile: ConfigFile = {
+        get: vi.fn((key: string) => {
+          if (key === 'assistant.wecom.agent') return Promise.resolve({ backend: 'codex' });
+          return Promise.reject(new Error('not found'));
+        }),
+        set: vi.fn(),
+      };
+      (ipcBridge.assistants.list.invoke as ReturnType<typeof vi.fn>).mockResolvedValue([
+        {
+          id: 'bare_codex',
+          source: 'generated',
+          agent_id: 'agent-codex',
+          agent: { type: 'acp', source: 'builtin', acp_backend: 'codex' },
+        },
+      ]);
+      const unsupportedErr = Object.assign(new Error('Backend GET /api/channel/settings/wecom failed (400)'), {
+        status: 400,
+      });
+      (ipcBridge.channel.getPlatformSettings.invoke as ReturnType<typeof vi.fn>).mockRejectedValue(unsupportedErr);
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.spyOn(console, 'info').mockImplementation(() => {});
+
+      await expect(migrateConfigStorage(configFile)).resolves.toBeUndefined();
+
+      expect(ipcBridge.channel.setAssistantSetting.invoke).not.toHaveBeenCalled();
+      expect(errorSpy).not.toHaveBeenCalled();
+    });
   });
 
   describe('migrateProviders', () => {

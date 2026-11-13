@@ -24,7 +24,12 @@ import {
   recordAutoUpdateQuitAndInstall,
   recordAutoUpdateStatus,
 } from './autoUpdateDiagnostics';
-import { buildCdnFeedOptions } from './updateFeed';
+import {
+  buildCdnFeedOptions,
+  resolveUpdateSourcePolicy,
+  type UpdateSourcePolicy,
+  type UpdateSourcePolicyOverrides,
+} from './updateFeed';
 
 const FORCE_DEV_AUTO_UPDATE_ENV = 'AIONUI_FORCE_DEV_AUTO_UPDATE';
 const DEBUG_AUTO_UPDATE_CURRENT_VERSION_ENV = 'AIONUI_DEBUG_AUTO_UPDATE_CURRENT_VERSION';
@@ -99,7 +104,10 @@ export interface AutoUpdaterEvents {
   'update-status': (status: AutoUpdateStatus) => void;
 }
 
-class AutoUpdaterService extends EventEmitter {
+export type AutoUpdaterServiceOptions = UpdateSourcePolicyOverrides;
+
+export class AutoUpdaterService extends EventEmitter {
+  private readonly _policy: UpdateSourcePolicy;
   private _isInitialized = false;
   private _eventHandlersSetup = false;
   private _allowPrerelease = false;
@@ -121,17 +129,25 @@ class AutoUpdaterService extends EventEmitter {
   private readonly _autoUpdaterHandlers = new Map<string, (...args: unknown[]) => void>();
   private readonly _nativeAutoUpdaterHandlers = new Map<string, (...args: unknown[]) => void>();
 
-  constructor() {
+  constructor(options?: AutoUpdaterServiceOptions) {
     super();
-    // Configure logging
+    this._policy = resolveUpdateSourcePolicy(options);
+
+    // Configure logging without mutating global electron-log file transport level
     autoUpdater.logger = log;
-    (autoUpdater.logger as typeof log).transports.file.level = 'debug';
 
     // Disable auto-download for manual control
     autoUpdater.autoDownload = false;
+
+    if (!this._policy.autoUpdateEnabled || !this._policy.cdnBaseUrl) {
+      autoUpdater.autoInstallOnAppQuit = false;
+      log.info('[auto-update] Auto-updater disabled by Rakazo fork update policy');
+      return;
+    }
+
     autoUpdater.autoInstallOnAppQuit = true;
-    this.configureDevAutoUpdateDebug();
-    const cdnFeedOptions = buildCdnFeedOptions();
+    this.configureDevAutoUpdateDebug(this._policy.cdnBaseUrl);
+    const cdnFeedOptions = buildCdnFeedOptions(this._policy.cdnBaseUrl);
 
     // Set the correct update channel based on platform and architecture before
     // any update checks are performed
@@ -151,7 +167,11 @@ class AutoUpdaterService extends EventEmitter {
     });
   }
 
-  private configureDevAutoUpdateDebug(): void {
+  get updatePolicy(): UpdateSourcePolicy {
+    return this._policy;
+  }
+
+  private configureDevAutoUpdateDebug(cdnBaseUrl: string): void {
     if (app.isPackaged || process.env[FORCE_DEV_AUTO_UPDATE_ENV] !== '1') {
       return;
     }
@@ -165,7 +185,7 @@ class AutoUpdaterService extends EventEmitter {
     // setFeedURL(), so this file only needs to satisfy the cache-dir lookup. Write a
     // minimal config to a temp path and point the updater at it. Must run before
     // setFeedURL() — the updateConfigPath setter clears the injected provider.
-    this.ensureDevUpdateConfig();
+    this.ensureDevUpdateConfig(cdnBaseUrl);
 
     const debugCurrentVersion = process.env[DEBUG_AUTO_UPDATE_CURRENT_VERSION_ENV];
     if (!debugCurrentVersion) {
@@ -192,9 +212,9 @@ class AutoUpdaterService extends EventEmitter {
    * setFeedURL() — but `updaterCacheDirName` must match the packaged value
    * (electron-builder defaults it to the appId) to reuse the same cache dir.
    */
-  private ensureDevUpdateConfig(): void {
+  private ensureDevUpdateConfig(cdnBaseUrl: string): void {
     try {
-      const cdnFeedOptions = buildCdnFeedOptions();
+      const cdnFeedOptions = buildCdnFeedOptions(cdnBaseUrl);
       const devConfig = [
         'provider: generic',
         `url: ${cdnFeedOptions.url}`,
@@ -605,6 +625,14 @@ class AutoUpdaterService extends EventEmitter {
 
   async checkForUpdates(): Promise<{ success: boolean; updateInfo?: UpdateInfo; error?: string }> {
     try {
+      if (!this._policy.autoUpdateEnabled) {
+        log.debug('[auto-update] checkForUpdates skipped (disabled by fork update policy)');
+        if (this._isInitialized) {
+          this.broadcastStatus({ status: 'not-available' });
+        }
+        return { success: true };
+      }
+
       if (!this._isInitialized) {
         throw new Error('AutoUpdaterService not initialized');
       }
@@ -674,6 +702,13 @@ class AutoUpdaterService extends EventEmitter {
     data: AutoUpdateReadyResult;
     error?: string;
   }> {
+    if (!this._policy.autoUpdateEnabled) {
+      return {
+        success: true,
+        data: { ready: false },
+      };
+    }
+
     try {
       if (!this._isInitialized) {
         throw new Error('AutoUpdaterService not initialized');
@@ -789,6 +824,11 @@ class AutoUpdaterService extends EventEmitter {
   }
 
   async downloadUpdate(): Promise<{ success: boolean; error?: string }> {
+    if (!this._policy.autoUpdateEnabled) {
+      log.debug('[auto-update] downloadUpdate skipped (disabled by fork update policy)');
+      return { success: false, error: 'Auto-update feed is disabled' };
+    }
+
     if (this._activeDownloadPromise) {
       log.debug('[auto-update] downloadUpdate reused active download');
       return this._activeDownloadPromise;
@@ -903,6 +943,14 @@ class AutoUpdaterService extends EventEmitter {
    * Check for updates and notify (for startup)
    */
   async checkForUpdatesAndNotify(): Promise<void> {
+    if (!this._policy.autoUpdateEnabled) {
+      log.debug('[auto-update] checkForUpdatesAndNotify skipped (disabled by fork update policy)');
+      if (this._isInitialized) {
+        this.broadcastStatus({ status: 'not-available' });
+      }
+      return;
+    }
+
     try {
       // Ensure clean state: prevent stale allowDowngrade=true from prior setAllowPrerelease(true) calls
       autoUpdater.allowDowngrade = false;

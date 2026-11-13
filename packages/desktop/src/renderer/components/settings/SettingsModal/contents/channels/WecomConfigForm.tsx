@@ -132,15 +132,23 @@ const WecomConfigForm: React.FC<WecomConfigFormProps> = ({
       try {
         const [assistantList, saved] = await Promise.all([
           assistants.list.invoke(),
-          channel.getPlatformSettings.invoke({ platform: 'wecom' }),
+          channel.getPlatformSettings.invoke({ platform: 'wecom' }).catch((error: unknown): null => {
+            const status = error && typeof error === 'object' ? (error as { status?: unknown }).status : undefined;
+            const msg = error instanceof Error ? error.message : '';
+            if (status !== 400 && status !== 404 && !msg.includes('Invalid platform')) {
+              console.warn('[WecomConfig] Failed to load platform settings:', error);
+            }
+            return null;
+          }),
         ]);
 
-        setAvailableAssistants(assistantList);
+        const safeAssistants = Array.isArray(assistantList) ? assistantList : [];
+        setAvailableAssistants(safeAssistants);
 
-        const selection = resolveChannelAssistantSelection(saved.assistant ?? undefined, assistantList);
+        const selection = resolveChannelAssistantSelection(saved?.assistant ?? undefined, safeAssistants);
         const nextAssistant =
-          assistantList.find((assistant) => assistant.id === selection.assistantId) ||
-          (!selection.hasBrokenSavedAssistant ? getDefaultChannelAssistant(assistantList) : undefined) ||
+          safeAssistants.find((assistant) => assistant.id === selection.assistantId) ||
+          (!selection.hasBrokenSavedAssistant ? getDefaultChannelAssistant(safeAssistants) : undefined) ||
           null;
 
         setHasBrokenSavedAssistant(selection.hasBrokenSavedAssistant);

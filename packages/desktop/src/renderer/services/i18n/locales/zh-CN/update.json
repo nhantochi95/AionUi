@@ -98,7 +98,7 @@
     "capsuleTooltip": "v{{version}} 更新内容",
     "buttonLabel": "更新亮点",
     "title": "AionUi v{{version}} 新特性一览",
-    "subtitle": "AionCore 内核 v0.3.0 · 发布于 2026-11-11",
+    "subtitle": "AionCore 内核 v0.3.1 · 发布于 2026-11-13",
     "gotIt": "知道了",
     "viewFullChangelog": "在 GitHub 查看完整更新日志",
     "sections": {

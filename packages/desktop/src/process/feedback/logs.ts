@@ -7,12 +7,24 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as zlib from 'node:zlib';
+import {
+  readLogFileTailUtf8Sync,
+  redactSensitiveLogText,
+  sliceTextTailAligned,
+} from '../utils/redactSensitiveLogText';
 
 const LOG_SUFFIXES = ['.log', '.aioncore.log', '.aionrs.log'];
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}/;
 const YEAR_DIR_PATTERN = /^\d{4}$/;
 const MONTH_OR_DAY_DIR_PATTERN = /^\d{2}$/;
 const DEFAULT_LOG_DAYS = 3;
+export const FEEDBACK_MAX_BYTES_PER_FILE = 256 * 1024;
+export const FEEDBACK_MAX_TOTAL_CHARS = 768 * 1024;
+
+export interface CollectFeedbackLogOptions {
+  maxBytesPerFile?: number;
+  maxTotalChars?: number;
+}
 
 export type FeedbackLogAttachment = {
   filename: string;
@@ -168,7 +180,10 @@ export function getRecentFeedbackLogPaths(logsDir: string, days = DEFAULT_LOG_DA
   return getRecentFeedbackLogPathsFromDirs([normalizedDir], days);
 }
 
-export function collectFeedbackLogAttachment(logsDirs: string | string[]): FeedbackLogAttachment | null {
+export function collectFeedbackLogAttachment(
+  logsDirs: string | string[],
+  options?: CollectFeedbackLogOptions
+): FeedbackLogAttachment | null {
   const normalizedDirs = normalizeLogDirs(logsDirs);
   const logPaths =
     normalizedDirs.length === 1
@@ -178,16 +193,22 @@ export function collectFeedbackLogAttachment(logsDirs: string | string[]): Feedb
     return null;
   }
 
+  const maxBytesPerFile = options?.maxBytesPerFile ?? FEEDBACK_MAX_BYTES_PER_FILE;
+  const maxTotalChars = options?.maxTotalChars ?? FEEDBACK_MAX_TOTAL_CHARS;
+
   const parts: string[] = [];
   for (const logPath of logPaths) {
     const basename = getLogHeaderName(logPath, normalizedDirs[0], true);
-    const content = fs.readFileSync(logPath, 'utf8');
+    const { content } = readLogFileTailUtf8Sync(logPath, maxBytesPerFile);
     parts.push(`=== ${basename} ===\n${content}\n`);
   }
 
+  const { content: boundedText } = sliceTextTailAligned(parts.join('\n'), maxTotalChars);
+  const sanitized = redactSensitiveLogText(boundedText);
+
   return {
     filename: 'logs.gz',
-    data: zlib.gzipSync(Buffer.from(parts.join('\n'), 'utf8')),
+    data: zlib.gzipSync(Buffer.from(sanitized, 'utf8'), { level: zlib.constants.Z_BEST_SPEED }),
     contentType: 'application/gzip',
   };
 }

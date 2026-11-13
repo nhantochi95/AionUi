@@ -1,5 +1,37 @@
 # Changelog
 
+## [2.3.1](https://github.com/nhantochi95/AionUi/compare/v2.3.0...feat/hybrid-command-hub) (2026-11-13)
+
+### Desktop
+
+#### Security & Fork Guardrails
+
+- **security:** redact BotFather tokens (prefixed, raw, and `%3A`-encoded) across feedback archive export (`logs.gz`), Sentry startup log bundling (`aionui-logs.log.gz`), and utility redaction helpers (`redactSensitiveLogText`)
+- **updater:** disable upstream `static.aionui.com` and `iOfficeAI/AionUi` update checks/downloads by default in custom fork builds (`RAKAZO_UPDATE_BASE_URL` / `RAKAZO_GITHUB_REPO` opt-in required)
+
+#### Bug Fixes
+
+- **team:** eliminate `409 TEAM_RUNTIME_NOT_READY` polling storms and `/slash-commands` `404` requests for dormant team members while keeping model/mode pickers unlocked and cold `getUsage` rings hydrated
+- **logs:** strip ANSI CSI sequences accurately in `configureConsoleLog` while preserving `'error'`/`'warn'` severity for multi-line stderr/panic output and eliminating duplicate `[aioncore] INFO` file entries
+- **browser:** fix `<webview>` Cloudflare redirect abort storms (`ERR_ABORTED (-3)`) via static `initialSrc`, `dom-ready` guest attachment queuing, single-mount ref listeners, and `http(s)` console-navigation filtering
+- **channels & telemetry:** resolve cold-boot `wecom 400` configuration errors and silence benign `no DSN` Sentry startup log errors
+
+### Core ([v0.3.1](https://github.com/nhantochi95/AionCore/tree/feat/hybrid-command-hub))
+
+#### Security
+
+- **redaction:** scrub BotFather tokens across `TelegramApi` `reqwest` errors, manual `PluginCredentials` `Debug`, JSONL `DailyDatedLogWriter`, context handover summaries, and `aioncore diagnose`
+- **version:** gate `VersionChecker` upstream repo resolution behind explicit `RAKAZO_GITHUB_REPO` configuration
+
+#### Bug Fixes
+
+- **compactor:** separate real window occupancy (`occupancy_tokens`) from per-turn billing (`_meta.turn_total_tokens` with monotonic `_meta.seq` + `0ms` sync flush) across `WarmAcp`, `AcpAgentManager`, `Claude`, and `Codex` while preserving `$0.00` `WalletType::CliSubscription` immunity
+- **gemini:** recover automatically from orphaned `-32603` Gemini CLI sessions (`kill_and_wait` on warmup failure + `prompt_existing_session` session reset with `SessionNewPreludeHook` re-injection) and latch `desired.mode_id` once on untrusted-folder rejections
+- **team & hub:** serve and persist dormant `GET`/`PUT` `config-options` (`200 OK`) via `agent_metadata.config_options` + `acp_session`, partition valid vs `rejected_files` on workspace-relative/`file://` Unicode NFC paths, use zero-copy `bytes::Bytes` with `sendDocument` fallback & `<data_dir>/outbound-staging`, propagate typed `TeamToolErrorCode` & `team_task_list` status aliases, and prevent `messages.id` TOCTOU duplicates
+- **macos:** add `-pgid` `EPERM` fallback (`kill(pid)` + `process_group_alive`) across `proc_control.rs` and `stderr_monitor.rs`, return `200 OK` default config for `wecom`, and preserve filesystem casing on macOS/Windows project watchers
+
+---
+
 ## [2.3.0](https://github.com/nhantochi95/AionUi/compare/v2.2.2...feat/hybrid-command-hub) (2026-11-11)
 
 ### Desktop

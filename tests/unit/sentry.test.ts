@@ -15,14 +15,17 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 
+const appGetPathMock = vi.hoisted(() => vi.fn(() => '/tmp'));
+
 vi.mock('electron', () => ({
-  app: { getVersion: () => '0.0.0-test', getPath: () => '/tmp', isPackaged: false },
+  app: { getVersion: () => '0.0.0-test', getPath: appGetPathMock, isPackaged: false },
 }));
 
 let sentryInitOptions: { beforeSend?: (event: unknown) => unknown } | undefined;
 const scopeSetContext = vi.fn();
 const scopeSetExtra = vi.fn();
 const scopeSetTag = vi.fn();
+const scopeAddAttachment = vi.fn();
 
 vi.mock('@sentry/electron/main', () => ({
   init: vi.fn((options: { beforeSend?: (event: unknown) => unknown }) => {
@@ -35,10 +38,12 @@ vi.mock('@sentry/electron/main', () => ({
       setTag: scopeSetTag,
       setExtra: scopeSetExtra,
       setContext: scopeSetContext,
+      addAttachment: scopeAddAttachment,
     });
   }),
   captureException: vi.fn(),
   captureEvent: vi.fn(),
+  captureMessage: vi.fn(),
   flush: vi.fn(async () => true),
 }));
 
@@ -55,7 +60,17 @@ vi.mock('@/process/services/autoUpdateDiagnostics', () => ({
 }));
 
 import * as Sentry from '@sentry/electron/main';
-import { listLogFilesSync, selectRecentLogFiles, packAndCap, captureBackendStartupFailure, initSentry } from '@/sentry';
+import type { BrowserWindow } from 'electron';
+import {
+  listLogFilesSync,
+  selectRecentLogFiles,
+  packAndCap,
+  captureBackendStartupFailure,
+  initSentry,
+  runStartupLogReport,
+  scheduleStartupLogReport,
+  UnretryableError,
+} from '@/sentry';
 
 describe('selectRecentLogFiles', () => {
   it('returns every file from the N most recent non-empty days', () => {
@@ -437,5 +452,154 @@ describe('initSentry beforeSend', () => {
     expect(sentryInitOptions?.beforeSend?.(event)).toBe(event);
 
     delete (globalThis as { __backendStartupFailed?: boolean }).__backendStartupFailed;
+  });
+});
+
+describe('startup log report redaction & DSN guardrails', () => {
+  it('redacts Telegram BotFather, sk-*, and Bearer secrets inside packAndCap', () => {
+    const tg = '654321987:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw';
+    const sk = 'sk-ant-api03-AbCdEfGhIjKlMnOpQrStUvWxYz012345';
+    const bearer = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5OTkifQ==';
+    const out = packAndCap(
+      [
+        {
+          name: '2026-11-12.aioncore.log',
+          mtime: Date.now(),
+          content: `url=https://api.telegram.org/bot${tg}/getUpdates key=${sk} auth=Bearer ${bearer}\n`,
+        },
+      ],
+      100_000
+    );
+
+    const text = gunzipSync(out.gzipped).toString('utf8');
+    expect(text).not.toContain(tg);
+    expect(text).not.toContain('AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw');
+    expect(text).not.toContain(sk);
+    expect(text).not.toContain(bearer);
+    expect(text).toContain('bot[REDACTED]/getUpdates');
+    expect(text).toContain('sk-[REDACTED]');
+    expect(text).toContain('Bearer [REDACTED]');
+  });
+
+  it('skips scheduling scheduleStartupLogReport entirely when SENTRY_DSN is unset or blank', () => {
+    const previousDsn = process.env.SENTRY_DSN;
+    delete process.env.SENTRY_DSN;
+    vi.useFakeTimers();
+    const onceSpy = vi.fn();
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      const fakeWindow = {
+        webContents: {
+          isLoading: () => true,
+          once: onceSpy,
+        },
+      } as unknown as BrowserWindow;
+
+      scheduleStartupLogReport(fakeWindow);
+      process.env.SENTRY_DSN = '   ';
+      scheduleStartupLogReport(fakeWindow);
+
+      expect(onceSpy).not.toHaveBeenCalled();
+      expect(vi.getTimerCount()).toBe(0);
+      expect(consoleErrorSpy).not.toHaveBeenCalled();
+    } finally {
+      consoleErrorSpy.mockRestore();
+      vi.useRealTimers();
+      if (previousDsn === undefined) {
+        delete process.env.SENTRY_DSN;
+      } else {
+        process.env.SENTRY_DSN = previousDsn;
+      }
+    }
+  });
+
+  it('silently ignores UnretryableError (no DSN / no log files / no non-empty logs) without console.error', async () => {
+    const previousDsn = process.env.SENTRY_DSN;
+    const tempDir = mkdtempSync(path.join(tmpdir(), 'aionui-sentry-unretryable-'));
+    const emptyLogsDir = path.join(tempDir, 'logs');
+    const userDataDir = path.join(tempDir, 'userData');
+    mkdirSync(emptyLogsDir, { recursive: true });
+    mkdirSync(userDataDir, { recursive: true });
+
+    vi.useFakeTimers();
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    appGetPathMock.mockImplementation((name?: string) => {
+      if (name === 'logs') return emptyLogsDir;
+      return userDataDir;
+    });
+
+    try {
+      process.env.SENTRY_DSN = 'https://public@example.ingest.sentry.io/1';
+      const fakeWindow = {
+        webContents: {
+          isLoading: () => false,
+          once: vi.fn(),
+        },
+      } as unknown as BrowserWindow;
+
+      scheduleStartupLogReport(fakeWindow);
+      await vi.advanceTimersByTimeAsync(31_000);
+
+      expect(consoleErrorSpy).not.toHaveBeenCalled();
+
+      // Direct verification that missing DSN throws UnretryableError
+      delete process.env.SENTRY_DSN;
+      rmSync(userDataDir, { recursive: true, force: true });
+      mkdirSync(userDataDir, { recursive: true });
+      await expect(runStartupLogReport()).rejects.toBeInstanceOf(UnretryableError);
+    } finally {
+      appGetPathMock.mockImplementation(() => '/tmp');
+      consoleErrorSpy.mockRestore();
+      vi.useRealTimers();
+      rmSync(tempDir, { recursive: true, force: true });
+      if (previousDsn === undefined) {
+        delete process.env.SENTRY_DSN;
+      } else {
+        process.env.SENTRY_DSN = previousDsn;
+      }
+    }
+  });
+
+  it('attaches redacted tail-capped aionui-logs.log.gz in runStartupLogReport when SENTRY_DSN is set', async () => {
+    const previousDsn = process.env.SENTRY_DSN;
+    const tempDir = mkdtempSync(path.join(tmpdir(), 'aionui-sentry-report-'));
+    const logsDir = path.join(tempDir, 'logs');
+    const userDataDir = path.join(tempDir, 'userData');
+    mkdirSync(logsDir, { recursive: true });
+    mkdirSync(userDataDir, { recursive: true });
+    scopeAddAttachment.mockClear();
+    scopeSetExtra.mockClear();
+
+    appGetPathMock.mockImplementation((name?: string) => {
+      if (name === 'logs') return logsDir;
+      return userDataDir;
+    });
+
+    try {
+      process.env.SENTRY_DSN = 'https://public@example.ingest.sentry.io/1';
+      const secret = '987654321:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw';
+      writeFileSync(
+        path.join(logsDir, '2026-11-12.aioncore.log'),
+        `2026-11-12T10:00:00Z WARN https://api.telegram.org/bot${secret}/getUpdates\n`
+      );
+
+      await runStartupLogReport();
+
+      expect(scopeAddAttachment).toHaveBeenCalledOnce();
+      const attachment = scopeAddAttachment.mock.calls[0]?.[0] as { filename: string; data: Buffer };
+      expect(attachment.filename).toBe('aionui-logs.log.gz');
+      const unpacked = gunzipSync(attachment.data).toString('utf8');
+      expect(unpacked).toContain('bot[REDACTED]/getUpdates');
+      expect(unpacked).not.toContain(secret);
+    } finally {
+      appGetPathMock.mockImplementation(() => '/tmp');
+      rmSync(tempDir, { recursive: true, force: true });
+      if (previousDsn === undefined) {
+        delete process.env.SENTRY_DSN;
+      } else {
+        process.env.SENTRY_DSN = previousDsn;
+      }
+    }
   });
 });

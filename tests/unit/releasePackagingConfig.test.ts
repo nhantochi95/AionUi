@@ -53,6 +53,15 @@ describe('release packaging configuration', () => {
     expect(script).toMatch(/--mac\s+dmg\s+zip\s+--\$\{targetArch\}\s+--prepackaged/);
   });
 
+  it('disables upstream auto-update metadata publishing in electron-builder.yml', () => {
+    const config = readProjectFile('packages/desktop/electron-builder.yml');
+    const publishBlock = yamlBlock(config, 'publish');
+
+    expect(publishBlock).toContain('publishAutoUpdate: false');
+    expect(publishBlock).not.toContain('owner: iOfficeAI');
+    expect(publishBlock).not.toContain('static.aionui.com');
+  });
+
   itWithBash('fails release asset preparation when a mac zip is missing', () => {
     const tempDir = mkdtempSync(resolve(tmpdir(), 'aionui-release-assets-'));
     const artifactsDir = resolve(tempDir, 'build-artifacts');

@@ -113,7 +113,10 @@ const getCheckHandler = async () => {
   vi.resetModules();
   const { initUpdateBridge } = await import('@process/bridge/updateBridge');
   const { ipcBridge } = await import('@/common');
-  initUpdateBridge();
+  initUpdateBridge({
+    cdnBaseUrl: 'https://static.aionui.com/releases',
+    githubRepo: 'iOfficeAI/AionUi',
+  });
   const provider = vi.mocked(ipcBridge.update.check.provider);
   const lastCall = provider.mock.calls.at(-1);
   if (!lastCall) throw new Error('update.check handler not registered');

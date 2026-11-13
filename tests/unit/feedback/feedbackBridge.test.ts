@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { closeSync, mkdirSync, mkdtempSync, openSync, rmSync, writeFileSync, writeSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { gunzipSync } from 'node:zlib';
@@ -215,6 +215,77 @@ describe('feedback logs', () => {
       expect(content).toContain('third day frontend nested');
       expect(content).not.toContain('too old flat');
       expect(content).toContain('2026/07/02/2026-07-02.aioncore.log');
+    } finally {
+      rmSync(logsDir, { recursive: true, force: true });
+    }
+  });
+
+  it('redacts Telegram BotFather tokens, sk-* keys, and Bearer tokens inside logs.gz', () => {
+    const logsDir = mkdtempSync(path.join(tmpdir(), 'aionui-feedback-redact-'));
+    try {
+      const tgSecret = '7123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw';
+      const skSecret = 'sk-proj-AbCdEfGhIjKlMnOpQrStUvWxYz0123456789';
+      const bearerSecret = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0=';
+      writeFileSync(
+        path.join(logsDir, '2026-11-12.aioncore.log'),
+        [
+          `2026-11-12T18:49:42.123Z WARN reqwest https://api.telegram.org/bot${tgSecret}/getUpdates timeout`,
+          `2026-11-12T18:49:43.000Z INFO raw=${tgSecret} encoded=bot7123456789%3AAAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw`,
+          `2026-11-12T18:49:44.000Z INFO key=${skSecret} auth=Bearer ${bearerSecret}`,
+          '2026-11-12T18:49:45.000Z INFO stack at server.ts:123 and 127.0.0.1:25810',
+        ].join('\n') + '\n'
+      );
+
+      const attachment = collectFeedbackLogAttachment(logsDir);
+      expect(attachment).not.toBeNull();
+      const content = gunzipSync(attachment!.data).toString('utf8');
+
+      expect(content).not.toContain(tgSecret);
+      expect(content).not.toContain('AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw');
+      expect(content).not.toContain(skSecret);
+      expect(content).not.toContain(bearerSecret);
+      expect(content).toContain('bot[REDACTED]/getUpdates');
+      expect(content).toContain('sk-[REDACTED]');
+      expect(content).toContain('Bearer [REDACTED]');
+      expect(content).toContain('server.ts:123');
+      expect(content).toContain('127.0.0.1:25810');
+    } finally {
+      rmSync(logsDir, { recursive: true, force: true });
+    }
+  });
+
+  it('bounds a 50 MB debug log file via tail slicing without stalling the main thread', () => {
+    const logsDir = mkdtempSync(path.join(tmpdir(), 'aionui-feedback-50mb-'));
+    try {
+      const logPath = path.join(logsDir, '2026-11-12.aioncore.log');
+      const fillerChunk = Buffer.from(('2026-11-12T10:00:00Z DEBUG noisy line without secrets\n').repeat(2000));
+      const chunks = Math.ceil((50 * 1024 * 1024) / fillerChunk.length);
+      writeFileSync(logPath, Buffer.alloc(0));
+      const fd = openSync(logPath, 'w');
+      try {
+        for (let i = 0; i < chunks; i++) {
+          writeSync(fd, fillerChunk);
+        }
+        writeSync(
+          fd,
+          Buffer.from(
+            '2026-11-12T12:00:00Z WARN https://api.telegram.org/bot888888888:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw/sendMessage TAIL_SENTINEL\n'
+          )
+        );
+      } finally {
+        closeSync(fd);
+      }
+
+      const start = performance.now();
+      const attachment = collectFeedbackLogAttachment(logsDir);
+      const elapsedMs = performance.now() - start;
+
+      expect(attachment).not.toBeNull();
+      expect(elapsedMs).toBeLessThan(150);
+      const content = gunzipSync(attachment!.data).toString('utf8');
+      expect(content).toContain('TAIL_SENTINEL');
+      expect(content).toContain('bot[REDACTED]/sendMessage');
+      expect(content).not.toContain('AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw');
     } finally {
       rmSync(logsDir, { recursive: true, force: true });
     }

@@ -1,4 +1,5 @@
 import { ipcBridge } from '@/common';
+import type { AcpConfigOptionBlocker } from '@/renderer/hooks/agent/useAcpConfigOptions';
 import React, { createContext, useCallback, useContext, useMemo, useRef } from 'react';
 import { createTeamConfigOptionsPort, type TeamConfigOptionsPort } from './teamConfigOptions';
 
@@ -17,6 +18,8 @@ type TeamPermissionContextValue = {
   warmupSession: () => Promise<void>;
   /** Read/write runtime config options through the team-owned session */
   configOptionsPort: TeamConfigOptionsPort;
+  /** Reactive check for whether an option is temporarily blocked while a runtime is starting */
+  isConfigOptionBlocked?: AcpConfigOptionBlocker;
 };
 
 const TeamPermissionContext = createContext<TeamPermissionContextValue | null>(null);
@@ -63,7 +66,7 @@ export const TeamPermissionProvider: React.FC<{
     return warmupPromiseRef.current;
   }, [team_id]);
 
-  const configOptionsPort = useMemo(
+  const transportPort = useMemo(
     () =>
       createTeamConfigOptionsPort({
         team_id,
@@ -72,11 +75,23 @@ export const TeamPermissionProvider: React.FC<{
           ipcBridge.team.getConfigOptions.invoke({ team_id: targetTeamId, conversation_id }),
         setConfigOption: (conversation_id, option_id, value) =>
           ipcBridge.team.setConfigOption.invoke({ team_id, conversation_id, option_id, value }),
-        isConfigOptionBlocked: (conversation_id, _option_id, category) =>
-          runtimeStartingConversationIds.has(conversation_id) ||
-          (conversation_id === leaderConversationId && category === 'mode' && runtimeStartingConversationIds.size > 0),
       }),
-    [leaderConversationId, runtimeStartingConversationIds, team_id, warmupSession]
+    [team_id, warmupSession]
+  );
+
+  const isConfigOptionBlocked = useCallback<AcpConfigOptionBlocker>(
+    (conversation_id, _option_id, category) =>
+      runtimeStartingConversationIds.has(conversation_id) ||
+      (conversation_id === leaderConversationId && category === 'mode' && runtimeStartingConversationIds.size > 0),
+    [leaderConversationId, runtimeStartingConversationIds]
+  );
+
+  const configOptionsPort = useMemo<TeamConfigOptionsPort>(
+    () => ({
+      ...transportPort,
+      isConfigOptionBlocked,
+    }),
+    [transportPort, isConfigOptionBlocked]
   );
 
   const value = useMemo<TeamPermissionContextValue>(
@@ -88,8 +103,17 @@ export const TeamPermissionProvider: React.FC<{
       propagateMode,
       warmupSession,
       configOptionsPort,
+      isConfigOptionBlocked,
     }),
-    [isLeaderAgent, leaderConversationId, allConversationIds, propagateMode, warmupSession, configOptionsPort]
+    [
+      isLeaderAgent,
+      leaderConversationId,
+      allConversationIds,
+      propagateMode,
+      warmupSession,
+      configOptionsPort,
+      isConfigOptionBlocked,
+    ]
   );
 
   return <TeamPermissionContext.Provider value={value}>{children}</TeamPermissionContext.Provider>;

@@ -498,6 +498,57 @@ describe('useAcpMessage', () => {
     expect(result.current.tokenUsage).toEqual({ total_tokens: 90_000 });
   });
 
+  it('hydrates cold getUsage while skipping both slash-commands fetches for dormant team members', async () => {
+    vi.mocked(getConversationOrNull).mockResolvedValue(null);
+    const prepareRuntime = vi.fn().mockResolvedValue(undefined);
+    getUsageInvokeMock.mockResolvedValue({ used: 24_500, size: 200_000 });
+    getSlashCommandsInvokeMock.mockResolvedValue([
+      {
+        command: 'review',
+        description: 'Review the current diff',
+      },
+    ]);
+
+    const { result } = renderHook(() =>
+      useAcpMessage('dormant-member-conv', {
+        skipWarmup: true,
+        prepareRuntime,
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.tokenUsage).toEqual({ total_tokens: 24_500 });
+      expect(result.current.context_limit).toBe(200_000);
+    });
+
+    expect(getUsageInvokeMock).toHaveBeenCalledWith({ conversation_id: 'dormant-member-conv' });
+    expect(prepareRuntime).not.toHaveBeenCalled();
+    expect(ensureRuntimeInvokeMock).not.toHaveBeenCalled();
+    expect(getSlashCommandsInvokeMock).not.toHaveBeenCalled();
+
+    // Calling fetchSlashCommands imperatively while still dormant remains a no-op
+    act(() => {
+      result.current.fetchSlashCommands();
+    });
+    expect(getSlashCommandsInvokeMock).not.toHaveBeenCalled();
+
+    // Once the member runtime actually becomes active, slash commands load cleanly
+    act(() => {
+      responseStreamHandlerRef.current?.({
+        type: 'agent_status',
+        data: { status: 'session_active' },
+        msg_id: 'status-1',
+        conversation_id: 'dormant-member-conv',
+      });
+    });
+
+    await waitFor(() => {
+      expect(getSlashCommandsInvokeMock).toHaveBeenCalledWith({ conversation_id: 'dormant-member-conv' });
+      expect(result.current.slashCommands).toHaveLength(1);
+    });
+    expect(ensureRuntimeInvokeMock).not.toHaveBeenCalled();
+  });
+
   it('survives a failing usage snapshot request without touching indicator state', async () => {
     vi.mocked(getConversationOrNull).mockResolvedValue(null);
     getUsageInvokeMock.mockRejectedValue(new Error('no active task'));

@@ -67,9 +67,16 @@ const AcpChat: React.FC<{
   usePendingConfirmationsRecovery(conversation_id);
   usePlanRecovery(conversation_id);
   const teamPermission = useTeamPermission();
+  const isLeaderInTeam = Boolean(
+    teamPermission &&
+      (teamPermission.leaderConversationId
+        ? conversation_id === teamPermission.leaderConversationId
+        : teamPermission.isLeaderAgent)
+  );
+  const isDormantTeamMember = Boolean(teamPermission && !isLeaderInTeam);
   const messageState = useAcpMessage(conversation_id, {
-    skipWarmup: Boolean(teamPermission),
-    prepareRuntime: teamPermission?.warmupSession,
+    skipWarmup: isDormantTeamMember,
+    prepareRuntime: isLeaderInTeam ? teamPermission?.warmupSession : undefined,
   });
 
   return (

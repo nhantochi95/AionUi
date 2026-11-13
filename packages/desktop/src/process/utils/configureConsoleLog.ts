@@ -71,10 +71,18 @@ log.transports.console.level = app.isPackaged ? false : CONSOLE_LOG_LEVEL;
 
 const BACKEND_PREFIX = '[aioncore]';
 
-// Strip ANSI escape sequences from a string.
-const ANSI_RE = new RegExp(String.raw`\u001B\[[0-9;]*m`, 'g');
+// Strip full ECMA-48 ANSI CSI sequences (colors, cursor movement, line clear, etc.).
+const ANSI_CSI_RE = new RegExp(String.raw`\u001B\[[0-?]*[ -/]*[@-~]`, 'g');
 
-const TRACING_LEVEL_MAP: Record<string, string> = {
+export type ElectronLogLevel = 'error' | 'warn' | 'info' | 'verbose' | 'debug' | 'silly';
+
+export type ParsedTracingLine = {
+  matched: boolean;
+  level?: ElectronLogLevel;
+  body: string;
+};
+
+const TRACING_LEVEL_MAP: Record<string, ElectronLogLevel> = {
   TRACE: 'verbose',
   DEBUG: 'debug',
   INFO: 'info',
@@ -82,28 +90,81 @@ const TRACING_LEVEL_MAP: Record<string, string> = {
   ERROR: 'error',
 };
 
-// Parse tracing output: "2026-04-25T11:17:43.184875Z  INFO target: message"
-// Returns { level, body } where body is "target: message" (timestamp and level stripped).
-const TRACING_RE = /^\d{4}-\d{2}-\d{2}T[\d:.]+Z\s+(TRACE|DEBUG|INFO|WARN|ERROR)\s+([\s\S]*)$/;
+// Parse plain-text tracing output: "2026-04-25T11:17:43.184875Z  INFO target: message"
+const TRACING_RE = /^\s*\d{4}-\d{2}-\d{2}T[\d:.]+(?:Z|[+-]\d{2}:\d{2})\s+(TRACE|DEBUG|INFO|WARN|ERROR)\s+([\s\S]*)$/;
 
-function parseTracingLine(raw: string): { level: string; body: string } {
-  const clean = raw.replace(ANSI_RE, '');
+export function parseTracingLine(raw: string): ParsedTracingLine {
+  const clean = raw.replace(ANSI_CSI_RE, '');
   const m = TRACING_RE.exec(clean);
-  if (m) return { level: TRACING_LEVEL_MAP[m[1]] ?? 'info', body: m[2] };
-  return { level: 'info', body: clean };
+  if (m) {
+    return {
+      matched: true,
+      level: TRACING_LEVEL_MAP[m[1]] ?? 'info',
+      body: m[2],
+    };
+  }
+
+  const trimmed = clean.trim();
+  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+    try {
+      const parsedJson = JSON.parse(trimmed) as {
+        level?: unknown;
+        target?: unknown;
+        message?: unknown;
+        fields?: Record<string, unknown>;
+      };
+      const rawLevel = typeof parsedJson?.level === 'string' ? parsedJson.level.toUpperCase() : '';
+      const mappedLevel = TRACING_LEVEL_MAP[rawLevel];
+      if (mappedLevel) {
+        const target = typeof parsedJson.target === 'string' ? parsedJson.target : '';
+        const fields = parsedJson.fields && typeof parsedJson.fields === 'object' ? parsedJson.fields : undefined;
+        const msgText =
+          (fields && typeof fields.message === 'string' ? fields.message : undefined) ??
+          (typeof parsedJson.message === 'string' ? parsedJson.message : undefined);
+        const extraFields = fields
+          ? Object.entries(fields)
+              .filter(([k]) => k !== 'message')
+              .map(([k, v]) => `${k}=${typeof v === 'string' ? v : JSON.stringify(v)}`)
+              .join(' ')
+          : '';
+        const messagePart = [msgText, extraFields].filter(Boolean).join(' ') || trimmed;
+        const body = target ? `${target}: ${messagePart}` : messagePart;
+        return { matched: true, level: mappedLevel, body };
+      }
+    } catch {
+      // Not valid JSON tracing output — treat as unmatched raw/stderr line.
+    }
+  }
+
+  return { matched: false, body: clean };
 }
 
-// Clean up backend subprocess log lines: strip tracing timestamps/levels,
-// resolve the log level, and keep them in the shared log file.
-log.hooks.push((message, _transport) => {
+// Clean up backend subprocess log lines:
+// - Suppress routine INFO/DEBUG/TRACE lines on the shared `file` transport only
+//   (they already live in YYYY-MM-DD.aioncore.log; dev console still sees them).
+// - Preserve WARN/ERROR tracing lines and all unmatched lines (multi-line Rust panics,
+//   stack frames, backend-launcher stderr) at their true severity without overwriting `message.level`.
+log.hooks.push((message, _transport, transportName) => {
   const first = message.data[0];
   if (typeof first !== 'string' || !first.startsWith(BACKEND_PREFIX)) return message;
 
-  const raw = first.slice(BACKEND_PREFIX.length + 1);
-  const { level, body } = parseTracingLine(raw);
-  const resolved = level as typeof message.level;
+  const raw = first.startsWith(`${BACKEND_PREFIX} `)
+    ? first.slice(BACKEND_PREFIX.length + 1)
+    : first.slice(BACKEND_PREFIX.length);
+  const parsed = parseTracingLine(raw);
 
-  return { ...message, level: resolved, data: [`${BACKEND_PREFIX} ${body}`, ...message.data.slice(1)] };
+  if (
+    transportName === 'file' &&
+    parsed.matched &&
+    (parsed.level === 'info' || parsed.level === 'debug' || parsed.level === 'verbose')
+  ) {
+    return false;
+  }
+
+  const resolvedLevel = parsed.matched && parsed.level ? parsed.level : message.level;
+  const formattedFirst = parsed.body.length > 0 ? `${BACKEND_PREFIX} ${parsed.body}` : BACKEND_PREFIX;
+
+  return { ...message, level: resolvedLevel, data: [formattedFirst, ...message.data.slice(1)] };
 });
 
 // Patch global console so every console.log/warn/error from any module

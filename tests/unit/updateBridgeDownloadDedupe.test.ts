@@ -63,12 +63,17 @@ vi.mock('electron-log', () => ({
   },
 }));
 
+const TEST_UPDATE_BRIDGE_OPTIONS = {
+  cdnBaseUrl: 'https://static.aionui.com/releases',
+  githubRepo: 'iOfficeAI/AionUi',
+} as const;
+
 const getDownloadHandler = async () => {
   vi.resetModules();
   const { initUpdateBridge } = await import('@process/bridge/updateBridge');
   const { ipcBridge } = await import('@/common');
 
-  initUpdateBridge();
+  initUpdateBridge(TEST_UPDATE_BRIDGE_OPTIONS);
 
   const provider = vi.mocked(ipcBridge.update.download.provider);
   const lastCall = provider.mock.calls.at(-1);
@@ -81,7 +86,7 @@ const getDownloadHandlers = async () => {
   const { initUpdateBridge } = await import('@process/bridge/updateBridge');
   const { ipcBridge } = await import('@/common');
 
-  initUpdateBridge();
+  initUpdateBridge(TEST_UPDATE_BRIDGE_OPTIONS);
 
   const downloadProvider = vi.mocked(ipcBridge.update.download.provider);
   const cancelProvider = vi.mocked(ipcBridge.update.cancelDownload.provider);

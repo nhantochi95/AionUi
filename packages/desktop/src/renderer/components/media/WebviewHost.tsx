@@ -47,6 +47,98 @@ export interface WebviewHostProps {
 const MIN_ZOOM_FACTOR = 0.75;
 const MAX_ZOOM_FACTOR = 1.5;
 
+function isStarOfficeUrl(targetUrl: string): boolean {
+  try {
+    const parsed = new URL(targetUrl);
+    const host = parsed.hostname.toLowerCase();
+    const localHost = host === '127.0.0.1' || host === 'localhost';
+    const knownPort = ['18791', '18888', '19000'].includes(parsed.port);
+    return localHost && knownPort;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Extract and validate a guest-requested navigation target from a `console-message` payload.
+ * Allows ONLY valid `http:` and `https:` URLs to prevent untrusted guest pages from
+ * spoofing `console.log('__WEBVIEW_HOST_NAVIGATE__:file:///...')` or `javascript:` schemes.
+ */
+export function extractSafeConsoleNavigateUrl(message: string): string | null {
+  if (!message || !message.includes('__WEBVIEW_HOST_NAVIGATE__')) return null;
+
+  let candidate: string | undefined;
+  const markerIndex = message.indexOf('__WEBVIEW_HOST_NAVIGATE__');
+  const jsonStart = message.indexOf('{', markerIndex);
+  if (jsonStart !== -1) {
+    try {
+      const payload = JSON.parse(message.slice(jsonStart)) as { url?: unknown };
+      if (typeof payload?.url === 'string') {
+        candidate = payload.url;
+      }
+    } catch {
+      // Fall back to pattern extraction below
+    }
+  }
+
+  if (!candidate) {
+    const quotedMatch = message.match(/"url"\s*:\s*"([^"]+)"/);
+    if (quotedMatch?.[1]) {
+      candidate = quotedMatch[1];
+    } else {
+      const colonMatch = message.match(/__WEBVIEW_HOST_NAVIGATE__:(\S+)/);
+      if (colonMatch?.[1]) {
+        candidate = colonMatch[1];
+      }
+    }
+  }
+
+  const trimmed = candidate?.trim();
+  if (!trimmed) return null;
+
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return null;
+    }
+    return trimmed;
+  } catch {
+    return null;
+  }
+}
+
+function safeGetWebviewUrl(webviewEl: Electron.WebviewTag | null): string | null {
+  if (!webviewEl || typeof webviewEl.getURL !== 'function') return null;
+  try {
+    return webviewEl.getURL() || null;
+  } catch {
+    return null;
+  }
+}
+
+function safeLoadWebviewUrl(webviewEl: Electron.WebviewTag | null, targetUrl: string): void {
+  if (!webviewEl || !targetUrl || typeof webviewEl.loadURL !== 'function') return;
+  try {
+    void Promise.resolve(webviewEl.loadURL(targetUrl)).catch(() => {});
+  } catch {
+    // Ignore synchronous guest-attachment timing errors
+  }
+}
+
+function safeExecuteJavaScript<T = unknown>(
+  webviewEl: Electron.WebviewTag | null,
+  code: string
+): Promise<T | undefined> {
+  if (!webviewEl || typeof webviewEl.executeJavaScript !== 'function') {
+    return Promise.resolve(undefined);
+  }
+  try {
+    return (Promise.resolve(webviewEl.executeJavaScript(code)) as Promise<T>).catch((): undefined => undefined);
+  } catch {
+    return Promise.resolve(undefined);
+  }
+}
+
 /**
  * Shared webview host component — extracted from URLViewer.
  *
@@ -75,29 +167,50 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const webviewRef = useRef<Electron.WebviewTag | null>(null);
-  const autoFitPendingRef = useRef(false);
+  const autoFitTimerRef = useRef<number | null>(null);
 
-  // Callbacks are mirrored into refs so the listener effect does not re-subscribe
-  // on every parent render (inline arrow props would otherwise churn it).
+  // Static initial `src` attribute for the `<webview>` element. Never mutated by
+  // React state updates (e.g. Cloudflare redirects on `did-navigate`), preventing
+  // Electron's guest-view manager from aborting in-flight navigations (`ERR_ABORTED -3`).
+  const [initialSrc] = useState(url);
+
+  // Electron `<webview>` methods (`getURL`, `loadURL`, `reload`, etc.) throw
+  // synchronously before the first `dom-ready` event fires. `isGuestAttachedRef`
+  // flips `true` on first `dom-ready` and resets `false` ONLY when `<webview>` unmounts.
+  const isGuestAttachedRef = useRef(false);
+  const pendingUrlRef = useRef<string | null>(null);
+  const lastGuestNavigatedUrlRef = useRef<string>(url);
+  const prevUrlPropRef = useRef<string>(url);
+
+  // Callbacks and live URL mirrored into refs so the `<webview>` listener effect
+  // attaches once per element mount without `MaxListenersExceededWarning` churn.
   const onUrlChangeRef = useRef(onUrlChange);
   onUrlChangeRef.current = onUrlChange;
   const onTitleChangeRef = useRef(onTitleChange);
   onTitleChangeRef.current = onTitleChange;
   const onFaviconChangeRef = useRef(onFaviconChange);
   onFaviconChangeRef.current = onFaviconChange;
+  const onDidFinishLoadRef = useRef(onDidFinishLoad);
+  onDidFinishLoadRef.current = onDidFinishLoad;
+  const onDidFailLoadRef = useRef(onDidFailLoad);
+  onDidFailLoadRef.current = onDidFailLoad;
 
   // Navigation state
   const [currentUrl, setCurrentUrl] = useState(url);
+  const currentUrlRef = useRef(url);
+  currentUrlRef.current = currentUrl;
   const [inputUrl, setInputUrl] = useState(url);
   const [isLoading, setIsLoading] = useState(true);
   const [zoomFactor, setZoomFactor] = useState(1);
   const [webviewReady, setWebviewReady] = useState(false);
 
+  const shouldAutoFitRef = useRef(false);
+
   // 最近由本组件内部触发的导航地址集合。
   //
   // 浏览器 tab 会把「当前地址」当作 url prop 回传下来，于是内部导航会形成回环：
   // 内部导航 → onUrlChange → 父组件更新 url prop → 下面的重置 effect 触发 → 历史被清空。
-  // 结果就是后退按钮永远是灰的。记住内部导航的地址，当 prop 只是这个回环的回声时
+  // 结果就是后退按钮永远是灰的。记住内部导航的地址，当 prop 只是这个回声时
   // 就跳过重置。完整说明与「为什么要记一组而不是最后一个」见 webviewHistory.ts。
   //
   // Addresses recently navigated to from inside this component.
@@ -113,19 +226,21 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
   const [canGoBack, setCanGoBack] = useState(false);
   const [canGoForward, setCanGoForward] = useState(false);
 
-  const isStarOfficeUrl = useCallback((targetUrl: string): boolean => {
-    try {
-      const parsed = new URL(targetUrl);
-      const host = parsed.hostname.toLowerCase();
-      const localHost = host === '127.0.0.1' || host === 'localhost';
-      const knownPort = ['18791', '18888', '19000'].includes(parsed.port);
-      return localHost && knownPort;
-    } catch {
-      return false;
+  const isStarOffice = isStarOfficeUrl(currentUrl);
+
+  const driveGuestNavigation = useCallback((targetUrl: string) => {
+    if (!targetUrl) return;
+    if (!isGuestAttachedRef.current) {
+      pendingUrlRef.current = targetUrl;
+      return;
+    }
+    pendingUrlRef.current = null;
+    const webviewEl = webviewRef.current;
+    if (targetUrl !== lastGuestNavigatedUrlRef.current && safeGetWebviewUrl(webviewEl) !== targetUrl) {
+      lastGuestNavigatedUrlRef.current = targetUrl;
+      safeLoadWebviewUrl(webviewEl, targetUrl);
     }
   }, []);
-
-  const isStarOffice = isStarOfficeUrl(currentUrl);
 
   // Single funnel for URL change notifications: every navigation path
   // (address bar, link click, back/forward, did-navigate) lands on currentUrl,
@@ -135,11 +250,11 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
     onUrlChangeRef.current?.(currentUrl);
   }, [currentUrl]);
 
-  // Reset when props.url changes
+  // Reset and navigate when external props.url changes
   useEffect(() => {
-    // 只有「外部」换址才该清空历史（换 tab、换预览文件）。判断逻辑抽到
-    // shouldResetHistoryForUrlProp，那里有完整的回环说明与单测。
-    //
+    if (prevUrlPropRef.current === url) return;
+    prevUrlPropRef.current = url;
+
     // Only an *external* address change should clear history (switching tabs or
     // preview targets). The decision lives in shouldResetHistoryForUrlProp, which
     // carries the full explanation of the loop and its unit tests.
@@ -147,17 +262,18 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
     internalNavRef.current.clear();
     setCanGoBack(false);
     setCanGoForward(false);
+    currentUrlRef.current = url;
     setCurrentUrl(url);
     setInputUrl(url);
     setIsLoading(true);
     setZoomFactor(1);
-    setWebviewReady(false);
-    autoFitPendingRef.current = isStarOfficeUrl(url);
-  }, [url]);
+    shouldAutoFitRef.current = isStarOfficeUrl(url);
+    driveGuestNavigation(url);
+  }, [url, driveGuestNavigation]);
 
   useEffect(() => {
     const webviewEl = webviewRef.current as any;
-    if (!webviewReady || !webviewEl?.setZoomFactor) return;
+    if (!webviewReady || !isGuestAttachedRef.current || !webviewEl?.setZoomFactor) return;
     try {
       webviewEl.setZoomFactor(isStarOffice ? zoomFactor : 1);
     } catch {
@@ -176,20 +292,19 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
     (targetUrl: string) => {
       const webviewEl = webviewRef.current;
       if (!webviewEl || !targetUrl) return;
-      if (targetUrl === currentUrl) return;
+      if (targetUrl === currentUrlRef.current) return;
 
-      // 标记为内部导航，避免 url prop 回环触发历史重置
       // Mark as internal so the url-prop echo cannot trigger a history reset.
       internalNavRef.current.record(targetUrl);
+      currentUrlRef.current = targetUrl;
       setCurrentUrl(targetUrl);
       setInputUrl(targetUrl);
-
-      webviewEl.src = targetUrl;
+      driveGuestNavigation(targetUrl);
     },
-    [currentUrl]
+    [driveGuestNavigation]
   );
 
-  // Webview event listeners
+  // Webview event listeners — attached once per <webview> DOM mount
   useEffect(() => {
     const webviewEl = webviewRef.current;
     if (!webviewEl) return;
@@ -204,15 +319,20 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
      * Align the buttons' enabled state with the webview's real history.
      */
     const syncNavState = () => {
-      setCanGoBack(Boolean(webviewEl.canGoBack?.()));
-      setCanGoForward(Boolean(webviewEl.canGoForward?.()));
+      if (!isGuestAttachedRef.current) return;
+      try {
+        setCanGoBack(Boolean(webviewEl.canGoBack?.()));
+        setCanGoForward(Boolean(webviewEl.canGoForward?.()));
+      } catch {
+        // Ignore transient Electron guest state errors
+      }
     };
 
     // Inject script to intercept links / window.open / form submissions
     const injectClickInterceptor = () => {
-      webviewEl
-        .executeJavaScript(
-          `
+      void safeExecuteJavaScript(
+        webviewEl,
+        `
         (function() {
           if (window.__webviewHostInjected) return;
           window.__webviewHostInjected = true;
@@ -251,16 +371,15 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
         })();
         true;
       `
-        )
-        .catch(() => {});
+      );
     };
 
     const handleConsoleMessage = (event: Electron.ConsoleMessageEvent) => {
       try {
         if (event.message.includes('__WEBVIEW_HOST_NAVIGATE__')) {
-          const match = event.message.match(/"url":"([^"]+)"/);
-          if (match && match[1]) {
-            navigateToWithHistory(match[1]);
+          const safeTargetUrl = extractSafeConsoleNavigateUrl(event.message);
+          if (safeTargetUrl) {
+            navigateToWithHistory(safeTargetUrl);
           }
           return;
         }
@@ -288,26 +407,35 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
 
     const handleDidNavigate = (event: Event & { url?: string }) => {
       const newUrl = event.url;
-      if (newUrl && newUrl !== currentUrl) {
-        internalNavRef.current.record(newUrl);
-        setCurrentUrl(newUrl);
-        setInputUrl(newUrl);
+      if (newUrl) {
+        lastGuestNavigatedUrlRef.current = newUrl;
+        if (newUrl !== currentUrlRef.current) {
+          internalNavRef.current.record(newUrl);
+          currentUrlRef.current = newUrl;
+          setCurrentUrl(newUrl);
+          setInputUrl(newUrl);
+        }
       }
       syncNavState();
     };
 
     const handleDomReady = () => {
+      isGuestAttachedRef.current = true;
       setWebviewReady(true);
+
+      const pendingUrl = pendingUrlRef.current;
+      if (pendingUrl) {
+        pendingUrlRef.current = null;
+        if (safeGetWebviewUrl(webviewEl) !== pendingUrl) {
+          lastGuestNavigatedUrlRef.current = pendingUrl;
+          safeLoadWebviewUrl(webviewEl, pendingUrl);
+        }
+      }
+
       syncNavState();
       injectClickInterceptor();
 
       /**
-       * 把这个 webview 的 webContents id 报给主进程，让单目标 CDP 通道附加到它。
-       *
-       * 放在 dom-ready 里：此时 getWebContentsId() 才可用，而且每次导航/切 tab 后都会
-       * 再触发一次，正好让通道跟着用户当前看的页面走。失败只记日志不打扰用户 ——
-       * Agent 操作浏览器本就是可选能力，不该因为它挡住正常浏览。
-       *
        * Report this webview's webContents id so the single-target CDP bridge can attach.
        * Done on dom-ready because getWebContentsId() is only valid by then, and because it
        * fires again after navigation or a tab switch, which keeps the bridge pointed at the
@@ -317,50 +445,56 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
       try {
         const webContentsId = webviewEl.getWebContentsId?.();
         if (typeof webContentsId === 'number') {
-          void ipcBridge.application.reportBrowserWebContentsId.invoke({ webContentsId }).then((res) => {
-            if (!res.success && res.msg) console.warn('[browser] agent control unavailable:', res.msg);
-          });
+          void ipcBridge.application.reportBrowserWebContentsId
+            .invoke({ webContentsId })
+            .then((res) => {
+              if (!res.success && res.msg) console.warn('[browser] agent control unavailable:', res.msg);
+            })
+            .catch(() => {});
         }
       } catch (error) {
         console.warn('[browser] could not report webContents id:', error);
       }
 
       // Inject viewport meta for responsive pages
-      webviewEl
-        .executeJavaScript(
-          `
+      void safeExecuteJavaScript(
+        webviewEl,
+        `
         (function() {
           let viewport = document.querySelector('meta[name="viewport"]');
           if (!viewport) {
             viewport = document.createElement('meta');
             viewport.name = 'viewport';
             viewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
-            document.head.appendChild(viewport);
+            document.head?.appendChild(viewport);
           }
         })();
         true;
       `
-        )
-        .catch(() => {});
+      );
 
       // Set up message listener inside webview
-      webviewEl
-        .executeJavaScript(
-          `
-        window.addEventListener('message', function(e) {
-          if (e.data && e.data.type === '__WEBVIEW_HOST_NAVIGATE__') {
-            console.log('__WEBVIEW_HOST_NAVIGATE__', JSON.stringify(e.data));
-          }
-        });
+      void safeExecuteJavaScript(
+        webviewEl,
+        `
+        (function() {
+          if (window.__webviewHostMessageInjected) return;
+          window.__webviewHostMessageInjected = true;
+          window.addEventListener('message', function(e) {
+            if (e.data && e.data.type === '__WEBVIEW_HOST_NAVIGATE__') {
+              console.log('__WEBVIEW_HOST_NAVIGATE__', JSON.stringify(e.data));
+            }
+          });
+        })();
         true;
       `
-        )
-        .catch(() => {});
+      );
 
-      if (isStarOfficeUrl(currentUrl)) {
-        webviewEl
-          .executeJavaScript(
-            `
+      const activeUrl = currentUrlRef.current;
+      if (isStarOfficeUrl(activeUrl)) {
+        void safeExecuteJavaScript(
+          webviewEl,
+          `
           (function() {
             if (window.__aionuiZoomInjected) return true;
             window.__aionuiZoomInjected = true;
@@ -380,18 +514,21 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
           })();
           true;
         `
-          )
-          .catch(() => {});
+        );
       }
 
-      if (isStarOfficeUrl(currentUrl) && autoFitPendingRef.current) {
-        window.setTimeout(() => {
+      if (isStarOfficeUrl(activeUrl) && shouldAutoFitRef.current) {
+        if (autoFitTimerRef.current !== null) {
+          window.clearTimeout(autoFitTimerRef.current);
+        }
+        autoFitTimerRef.current = window.setTimeout(() => {
+          autoFitTimerRef.current = null;
           const currentWebview = webviewRef.current;
           const currentContent = contentRef.current;
-          if (!currentWebview || !currentContent) return;
-          void currentWebview
-            .executeJavaScript(
-              `
+          if (!isGuestAttachedRef.current || !currentWebview || !currentContent) return;
+          void safeExecuteJavaScript<{ width?: number }>(
+            currentWebview,
+            `
             (() => {
               try {
                 const stage = document.getElementById('main-stage');
@@ -404,27 +541,25 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
               }
             })();
           `
-            )
-            .then((result: any) => {
-              const stageWidth = Number(result?.width || 0);
-              if (!stageWidth) return;
-              const next = Number((currentContent.clientWidth / stageWidth).toFixed(2));
-              setZoomFactor(Math.max(MIN_ZOOM_FACTOR, Math.min(MAX_ZOOM_FACTOR, next)));
-              autoFitPendingRef.current = false;
-            })
-            .catch(() => {});
+          ).then((result) => {
+            const stageWidth = Number(result?.width || 0);
+            if (!stageWidth) return;
+            const next = Number((currentContent.clientWidth / stageWidth).toFixed(2));
+            setZoomFactor(Math.max(MIN_ZOOM_FACTOR, Math.min(MAX_ZOOM_FACTOR, next)));
+            shouldAutoFitRef.current = false;
+          });
         }, 120);
       }
     };
 
     const handleDidFinishLoad = () => {
       setIsLoading(false);
-      onDidFinishLoad?.();
+      onDidFinishLoadRef.current?.();
     };
 
     const handleDidFailLoad = (event: any) => {
       setIsLoading(false);
-      onDidFailLoad?.(event.errorCode, event.errorDescription);
+      onDidFailLoadRef.current?.(event.errorCode, event.errorDescription);
     };
 
     const handlePageTitleUpdated = (event: Event & { title?: string }) => {
@@ -448,6 +583,11 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
     webviewEl.addEventListener('page-favicon-updated', handlePageFaviconUpdated as EventListener);
 
     return () => {
+      isGuestAttachedRef.current = false;
+      if (autoFitTimerRef.current !== null) {
+        window.clearTimeout(autoFitTimerRef.current);
+        autoFitTimerRef.current = null;
+      }
       webviewEl.removeEventListener('did-start-loading', handleStartLoading);
       webviewEl.removeEventListener('did-stop-loading', handleStopLoading);
       webviewEl.removeEventListener('dom-ready', handleDomReady);
@@ -459,7 +599,7 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
       webviewEl.removeEventListener('page-title-updated', handlePageTitleUpdated as EventListener);
       webviewEl.removeEventListener('page-favicon-updated', handlePageFaviconUpdated as EventListener);
     };
-  }, [navigateToWithHistory, currentUrl, onDidFinishLoad, onDidFailLoad, isStarOfficeUrl]);
+  }, [navigateToWithHistory]);
 
   // Resize observer for content area
   useEffect(() => {
@@ -490,10 +630,10 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
   const handleZoomFit = useCallback(() => {
     const currentWebview = webviewRef.current;
     const currentContent = contentRef.current;
-    if (!isStarOffice || !currentWebview || !currentContent) return;
-    void currentWebview
-      .executeJavaScript(
-        `
+    if (!isStarOffice || !isGuestAttachedRef.current || !currentWebview || !currentContent) return;
+    void safeExecuteJavaScript<{ width?: number }>(
+      currentWebview,
+      `
       (() => {
         try {
           const stage = document.getElementById('main-stage');
@@ -506,14 +646,12 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
         }
       })();
     `
-      )
-      .then((result: any) => {
-        const stageWidth = Number(result?.width || 0);
-        if (!stageWidth) return;
-        const next = Number((currentContent.clientWidth / stageWidth).toFixed(2));
-        setZoomFactor(Math.max(MIN_ZOOM_FACTOR, Math.min(MAX_ZOOM_FACTOR, next)));
-      })
-      .catch(() => {});
+    ).then((result) => {
+      const stageWidth = Number(result?.width || 0);
+      if (!stageWidth) return;
+      const next = Number((currentContent.clientWidth / stageWidth).toFixed(2));
+      setZoomFactor(Math.max(MIN_ZOOM_FACTOR, Math.min(MAX_ZOOM_FACTOR, next)));
+    });
   }, [isStarOffice]);
 
   const handleOuterWheelZoom = useCallback(
@@ -546,19 +684,20 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
    */
   const handleGoBack = useCallback(() => {
     const webviewEl = webviewRef.current;
-    if (!webviewEl?.canGoBack?.()) return;
+    if (!isGuestAttachedRef.current || !webviewEl?.canGoBack?.()) return;
     webviewEl.goBack();
   }, []);
 
   const handleGoForward = useCallback(() => {
     const webviewEl = webviewRef.current;
-    if (!webviewEl?.canGoForward?.()) return;
+    if (!isGuestAttachedRef.current || !webviewEl?.canGoForward?.()) return;
     webviewEl.goForward();
   }, []);
 
   // Refresh
   const handleRefresh = useCallback(() => {
-    webviewRef.current?.reload();
+    if (!isGuestAttachedRef.current) return;
+    webviewRef.current?.reload?.();
   }, []);
 
   // URL bar submit
@@ -784,7 +923,7 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
       >
         <webview
           ref={webviewRef as any}
-          src={currentUrl}
+          src={initialSrc}
           className='border-0 absolute start-0 top-0'
           style={{
             opacity: !showNavBar && isLoading ? 0 : 1,

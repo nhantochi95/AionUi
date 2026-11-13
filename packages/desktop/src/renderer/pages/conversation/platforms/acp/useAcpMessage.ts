@@ -677,12 +677,35 @@ export const useAcpMessage = (
     };
   }, [conversation_id]);
 
+  const isRuntimeActive = acpStatus === 'session_active' || acpStatus === 'authenticated';
+
+  // Hydrate the context-usage indicator cold from the backend SQLite snapshot.
+  // Live acp_context_usage stream events may land first, so never overwrite a
+  // value that is already set. Runs unconditionally on mount regardless of skipWarmup.
+  useEffect(() => {
+    let cancelled = false;
+    void ipcBridge.conversation.getUsage
+      .invoke({ conversation_id })
+      .then((usage) => {
+        if (cancelled || !usage || typeof usage.used !== 'number' || usage.used <= 0) return;
+        setTokenUsage((prev) => prev ?? tokenUsageFromAcpUsage(usage));
+        if (usage.size > 0) {
+          setContextLimit((prev) => (prev > 0 ? prev : usage.size));
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [conversation_id]);
+
   // Fetch slash commands via HTTP after runtime ensure completes.
   // WebSocket push of available_commands arrives during warmup when no
   // StreamRelay is listening, so the initial load must come from HTTP.
-  // In team mode, runtime preparation is coordinated by the team send box.
+  // Dormant non-leader team members pass `skipWarmup: true` and must NOT hit
+  // `/slash-commands` (which returns 404 until the member runtime starts).
   useEffect(() => {
-    if (options?.skipWarmup && !options.prepareRuntime) return;
+    if (options?.skipWarmup) return;
     let cancelled = false;
     const runtimeReady = options?.prepareRuntime?.() ?? ensureConversationRuntime(conversation_id);
     void runtimeReady
@@ -694,19 +717,6 @@ export const useAcpMessage = (
         if (cancelled) return;
         if (!commands?.length) return;
         setSlashCommands(commands);
-      })
-      .catch(() => {});
-    // Hydrate the context-usage indicator from the backend snapshot. Live
-    // acp_context_usage stream events may land first, so never overwrite a
-    // value that is already set.
-    void runtimeReady
-      .then(() => ipcBridge.conversation.getUsage.invoke({ conversation_id }))
-      .then((usage) => {
-        if (cancelled || !usage || typeof usage.used !== 'number' || usage.used <= 0) return;
-        setTokenUsage((prev) => prev ?? tokenUsageFromAcpUsage(usage));
-        if (usage.size > 0) {
-          setContextLimit((prev) => (prev > 0 ? prev : usage.size));
-        }
       })
       .catch(() => {});
     return () => {
@@ -729,7 +739,10 @@ export const useAcpMessage = (
   }, [markTurnEnded]);
 
   const fetchSlashCommands = useCallback(() => {
-    const runtimeReady = options?.prepareRuntime?.() ?? ensureConversationRuntime(conversation_id);
+    if (options?.skipWarmup && !isRuntimeActive) return;
+    const runtimeReady = options?.skipWarmup
+      ? Promise.resolve()
+      : (options?.prepareRuntime?.() ?? ensureConversationRuntime(conversation_id));
     void runtimeReady
       .then(() => fetchAcpSlashCommands(conversation_id))
       .then((commands) => {
@@ -737,16 +750,23 @@ export const useAcpMessage = (
         setSlashCommands(commands);
       })
       .catch(() => {});
-  }, [conversation_id, options?.prepareRuntime]);
+  }, [conversation_id, isRuntimeActive, options?.prepareRuntime, options?.skipWarmup]);
 
-  // Populate the slash command palette on mount so existing ACP conversations
-  // show agent commands immediately, not only after a live stream event.
-  // The warmup effect above already fetches on mount; only fetch here when
-  // warmup was skipped to avoid a duplicate prepareRuntime + IPC round-trip.
+  // Populate the slash command palette for skipped-warmup team members once
+  // their runtime actually becomes active (`session_active` / `authenticated`).
   useEffect(() => {
-    if (!options?.skipWarmup || options?.prepareRuntime) return;
-    fetchSlashCommands();
-  }, [fetchSlashCommands, options?.prepareRuntime, options?.skipWarmup]);
+    if (!options?.skipWarmup || !isRuntimeActive) return;
+    let cancelled = false;
+    void fetchAcpSlashCommands(conversation_id)
+      .then((commands) => {
+        if (cancelled || !commands.length) return;
+        setSlashCommands(commands);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [conversation_id, isRuntimeActive, options?.skipWarmup]);
 
   return {
     thought,
